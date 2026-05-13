@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env-bootstrap.js";
 
 import { printStartupDatabaseStatus } from "./db/startup-status.js";
 import app from "./app.js";

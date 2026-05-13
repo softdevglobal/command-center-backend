@@ -2,6 +2,9 @@ import { Router } from "express";
 
 import { getFirebaseBlackApp } from "../db/firebase/firebase.black.js";
 import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
+import agentsRoutes from "./agents.routes.js";
+import authRoutes from "./auth.routes.js";
+import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
   getSupabaseConnectionInfo,
@@ -12,16 +15,35 @@ const router = Router();
 router.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Command Center Backend Running"
+    message: "Command Center Backend Running",
+    apis: {
+      "POST /api/super-admin/register":
+        "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
+      "POST /api/auth/login": "Sign in — super admin or agent; returns access_token",
+      "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
+      "POST /api/agents/register":
+        "Create new agent — super_admin only (Bearer access_token); agents stored in Supabase only",
+      "GET /api/health/db": "Supabase + Firebase connectivity",
+    },
   });
 });
 
-/** Verifies Supabase (Auth REST) and Firebase Admin (optional) for local testing. */
+/** Super admin bootstrap — POST /api/super-admin/register */
+router.use("/super-admin", superAdminRoutes);
+
+/** Login + session profile — /api/auth/* */
+router.use("/auth", authRoutes);
+
+/** Register agents — POST /api/agents/register (super_admin Bearer only; Supabase only). */
+router.use("/agents", agentsRoutes);
+
+/** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {
   const supabase = getSupabaseClient();
   let supabaseStatus: { ok: boolean; message: string } = {
     ok: false,
-    message: "Missing SUPABASE_URL and key (or use VITE_SUPABASE_* in .env for dev).",
+    message:
+      "Missing SUPABASE_URL and key (or use VITE_SUPABASE_* in .env for dev).",
   };
 
   if (supabase) {
@@ -33,21 +55,21 @@ router.get("/health/db", async (_req, res) => {
           message: "Supabase client exists but connection info is missing.",
         };
       } else {
-      const healthUrl = `${info.url.replace(/\/$/, "")}/auth/v1/health`;
-      const r = await fetch(healthUrl, {
-        headers: {
-          apikey: info.key,
-          Authorization: `Bearer ${info.key}`,
-        },
-      });
-      if (r.ok) {
-        supabaseStatus = { ok: true, message: "Supabase Auth reachable." };
-      } else {
-        supabaseStatus = {
-          ok: false,
-          message: `Supabase health HTTP ${r.status}`,
-        };
-      }
+        const healthUrl = `${info.url.replace(/\/$/, "")}/auth/v1/health`;
+        const r = await fetch(healthUrl, {
+          headers: {
+            apikey: info.key,
+            Authorization: `Bearer ${info.key}`,
+          },
+        });
+        if (r.ok) {
+          supabaseStatus = { ok: true, message: "Supabase Auth reachable." };
+        } else {
+          supabaseStatus = {
+            ok: false,
+            message: `Supabase health HTTP ${r.status}`,
+          };
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
@@ -62,7 +84,7 @@ router.get("/health/db", async (_req, res) => {
     firebaseBlackStatus = {
       ok: false,
       message:
-        "Set FIREBASE_BLACK_PROJECT_ID, FIREBASE_BLACK_CLIENT_EMAIL, FIREBASE_BLACK_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT JSON).",
+        "Set FIREBASE_BLACK_* or FIREBASE_SERVICE_ACCOUNT JSON for black.",
     };
   } else {
     try {
@@ -87,7 +109,7 @@ router.get("/health/db", async (_req, res) => {
     firebasePinkStatus = {
       ok: false,
       message:
-        "Set FIREBASE_PINK_PROJECT_ID, FIREBASE_PINK_CLIENT_EMAIL, FIREBASE_PINK_PRIVATE_KEY (or FIREBASE_PINK_SERVICE_ACCOUNT JSON).",
+        "Set FIREBASE_PINK_* or FIREBASE_PINK_SERVICE_ACCOUNT for pink.",
     };
   } else {
     try {
@@ -106,13 +128,11 @@ router.get("/health/db", async (_req, res) => {
   }
 
   res.json({
-    success:
-      supabaseStatus.ok &&
-      firebaseBlackStatus.ok &&
-      firebasePinkStatus.ok,
+    success: supabaseStatus.ok && firebaseBlackStatus.ok && firebasePinkStatus.ok,
     supabase: supabaseStatus,
     firebaseBlack: firebaseBlackStatus,
     firebasePink: firebasePinkStatus,
+    note: "Agents are stored in Supabase only; Firebase checks are connectivity-only.",
   });
 });
 

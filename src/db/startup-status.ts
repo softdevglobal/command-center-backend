@@ -56,7 +56,7 @@ async function checkFirebase(
   }
 }
 
-/** Logs database connectivity after env is loaded (run before listen). */
+/** Logs connectivity: Supabase + Firebase (no agent data written to Firebase). */
 export async function printStartupDatabaseStatus(port: number): Promise<void> {
   const lines = await Promise.all([
     checkSupabase(),
