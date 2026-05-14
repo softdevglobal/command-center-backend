@@ -2,11 +2,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let cached: SupabaseClient | null | undefined;
 
+function trimEnv(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const t = value.trim();
+  return t === "" ? undefined : t;
+}
+
 function isUnset(value: string | undefined): boolean {
+  const v = trimEnv(value);
   return (
-    value === undefined ||
-    value === "" ||
-    value.startsWith("your_")
+    v === undefined ||
+    v.startsWith("your_")
   );
 }
 
@@ -28,6 +34,41 @@ function resolveSupabaseKey(): string | undefined {
   const vitePub = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!isUnset(vitePub)) return vitePub;
   return undefined;
+}
+
+/** Public Supabase API URL (with or without trailing slash normalized by callers). */
+export function getSupabaseProjectUrl(): string | null {
+  const url = resolveSupabaseUrl();
+  return url ?? null;
+}
+
+/**
+ * Anon / publishable key for calling Edge Functions with the caller's JWT
+ * (`apikey` header). Prefer this over the service role for `create-agent`.
+ */
+export function getSupabaseAnonKeyForEdge(): string | null {
+  const primary = process.env.SUPABASE_ANON_KEY;
+  if (!isUnset(primary)) return primary as string;
+  const viteAnon = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!isUnset(viteAnon)) return viteAnon as string;
+  const vitePub = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!isUnset(vitePub)) return vitePub as string;
+  return null;
+}
+
+/** Required for server-side auth.admin and privileged inserts (agent registration). */
+export function getSupabaseServiceRoleKey(): string | null {
+  const k = trimEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!isUnset(k)) return k as string;
+  return null;
+}
+
+/** Which Supabase env vars are missing for agent registration (URL + service role). */
+export function getMissingSupabaseRegistrationEnv(): string[] {
+  const missing: string[] = [];
+  if (!getSupabaseProjectUrl()) missing.push("SUPABASE_URL");
+  if (!getSupabaseServiceRoleKey()) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  return missing;
 }
 
 /** URL and key used by the client (for health checks without exposing keys in responses). */

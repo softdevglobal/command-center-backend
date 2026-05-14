@@ -1,59 +1,32 @@
 import admin from "firebase-admin";
 
-import {
-  parsePrivateKey,
-  parseServiceAccountJson,
-} from "./firebase.helpers.js";
+import { resolveFirebaseServiceAccount } from "./firebase.helpers.js";
 
-const APP_NAME = "bmspro-pink";
+let cached: admin.app.App | null | undefined;
 
-function resolvePinkServiceAccount(): {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-} | null {
-  const fromJson = parseServiceAccountJson(
-    process.env.FIREBASE_PINK_SERVICE_ACCOUNT
-  );
-  if (fromJson) return fromJson;
-
-  const b64 = process.env.FIREBASE_PINK_SERVICE_ACCOUNT_BASE64?.trim();
-  if (b64) {
-    try {
-      const decoded = Buffer.from(b64, "base64").toString("utf8");
-      const fromDecoded = parseServiceAccountJson(decoded);
-      if (fromDecoded) return fromDecoded;
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const projectId = process.env.FIREBASE_PINK_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_PINK_CLIENT_EMAIL;
-  const privateKey = parsePrivateKey(process.env.FIREBASE_PINK_PRIVATE_KEY);
-
-  if (!projectId || !clientEmail || !privateKey) return null;
-
-  return { projectId, clientEmail, privateKey };
-}
-
-/** Firebase Admin for project bmspro-pink (service account env vars). */
+/** bmspro-pink — connectivity only; agents are not written here. */
 export function getFirebasePinkApp(): admin.app.App | null {
-  if (admin.apps.some((a) => a?.name === APP_NAME)) {
-    return admin.app(APP_NAME);
+  if (cached !== undefined) return cached;
+
+  const sa = resolveFirebaseServiceAccount("PINK");
+  if (!sa) {
+    cached = null;
+    return null;
   }
 
-  const cred = resolvePinkServiceAccount();
-  if (!cred) return null;
-
-  return admin.initializeApp(
-    {
-      credential: admin.credential.cert({
-        projectId: cred.projectId,
-        clientEmail: cred.clientEmail,
-        privateKey: cred.privateKey,
-      }),
-    },
-    APP_NAME
-  );
+  try {
+    try {
+      cached = admin.app("pink");
+      return cached;
+    } catch {
+      cached = admin.initializeApp(
+        { credential: admin.credential.cert(sa) },
+        "pink"
+      );
+      return cached;
+    }
+  } catch {
+    cached = null;
+    return null;
+  }
 }
