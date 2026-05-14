@@ -57,7 +57,10 @@ async function checkFirebase(
 }
 
 /** Logs connectivity: Supabase + Firebase (no agent data written to Firebase). */
-export async function printStartupDatabaseStatus(port: number): Promise<void> {
+export async function printStartupDatabaseStatus(
+  port: number,
+  host: string
+): Promise<void> {
   const lines = await Promise.all([
     checkSupabase(),
     checkFirebase("Firebase (black)", getFirebaseBlackApp),
@@ -67,7 +70,7 @@ export async function printStartupDatabaseStatus(port: number): Promise<void> {
 
   console.log("");
   console.log("============================================================");
-  console.log(`  Command Center Backend  |  port ${port}`);
+  console.log(`  Command Center Backend  |  ${host}:${port}`);
   console.log("------------------------------------------------------------");
   for (const line of lines) {
     console.log(`  ${line}`);

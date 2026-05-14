@@ -28,7 +28,9 @@ router.post("/login", async (req, res) => {
   });
 
   if (!result.ok) {
-    res.status(401).json({ error: result.message });
+    const status =
+      "networkError" in result && result.networkError ? 503 : 401;
+    res.status(status).json({ error: result.message });
     return;
   }
 

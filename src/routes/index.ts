@@ -12,17 +12,32 @@ import {
 
 const router = Router();
 
-router.get("/", (req, res) => {
+/** Default local port (matches server.ts). macOS uses :5000 for AirPlay — never default to 5000. */
+function advertisedPort(): number {
+  const n = Number(process.env.PORT);
+  return Number.isFinite(n) && n > 0 ? n : 5050;
+}
+
+router.get("/", (_req, res) => {
+  const port = advertisedPort();
   res.json({
     success: true,
     message: "Command Center Backend Running",
+    listen: {
+      port,
+      apiBase: `http://127.0.0.1:${port}/api`,
+      loginUrl: `http://127.0.0.1:${port}/api/auth/login`,
+      note:
+        "On macOS, http://127.0.0.1:5000 is usually AirPlay (ControlCenter), not this app — it returns 403. Use listen.port / loginUrl from THIS response.",
+    },
     apis: {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
-      "POST /api/auth/login": "Sign in — super admin or agent; returns access_token",
+      "POST /api/auth/login":
+        "Sign in — Supabase session + firebaseBlack.agenttoken for Black signInWithCustomToken.",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
-        "Create new agent — super_admin only (Bearer access_token); agents stored in Supabase only",
+        "Create new agent — super_admin only (Bearer access_token). Delegates to BMS Black so Supabase Auth + agents row + Firebase Black user are created together.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
     },
   });

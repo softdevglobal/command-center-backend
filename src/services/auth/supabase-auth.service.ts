@@ -5,6 +5,8 @@ import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
 } from "../../db/supabase/supabase.client.js";
+import { fetchFirebaseBlackTokenForSupabaseUser } from "../black/firebase-token-from-black.service.js";
+import { mintFirebaseBlackCustomTokenLocal } from "../black/mint-firebase-black-token-local.service.js";
 
 export type LoginInput = {
   email: string;
@@ -24,6 +26,12 @@ export type LoginSuccess = {
   };
   roles: string[];
   agentType: string;
+  /** Firebase Black — `agenttoken` is the custom JWT for `signInWithCustomToken`. */
+  firebaseBlack?: {
+    agenttoken: string;
+    uid: string;
+    expiresIn: number;
+  };
 };
 
 function displayNameFromUser(meta: Record<string, unknown> | undefined): string {
@@ -54,7 +62,10 @@ async function fetchRoles(userId: string): Promise<string[]> {
 /** Email/password against Supabase Auth; returns session tokens + roles from `user_roles`. */
 export async function loginWithSupabasePassword(
   input: LoginInput
-): Promise<{ ok: true; body: LoginSuccess } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; body: LoginSuccess }
+  | { ok: false; message: string; networkError?: boolean }
+> {
   const url = getSupabaseProjectUrl();
   const anon = getSupabaseAnonKeyForEdge();
 
@@ -73,9 +84,17 @@ export async function loginWithSupabasePassword(
   });
 
   if (error || !data.session || !data.user) {
+    const raw = error?.message ?? "Login failed.";
+    const networkLike =
+      /fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|getaddrinfo|network|Name resolution/i.test(
+        raw
+      );
     return {
       ok: false,
-      message: error?.message ?? "Login failed.",
+      message: networkLike
+        ? `${raw} — cannot reach Supabase (check internet / DNS / VPN). Login does not use JWT_SECRET.`
+        : raw,
+      networkError: networkLike,
     };
   }
 
@@ -101,6 +120,27 @@ export async function loginWithSupabasePassword(
   };
   if (data.session.expires_at !== undefined) {
     body.expires_at = data.session.expires_at;
+  }
+
+  const emailForFirebase =
+    data.user.email ?? userOut.email ?? input.email.trim();
+
+  const fbToken =
+    (await mintFirebaseBlackCustomTokenLocal({
+      supabaseUserId: data.user.id,
+      email: emailForFirebase,
+      roles,
+      displayName: displayNameFromUser(meta),
+    })) ??
+    (await fetchFirebaseBlackTokenForSupabaseUser({
+      supabaseBearer: data.session.access_token,
+    }));
+  if (fbToken) {
+    body.firebaseBlack = {
+      agenttoken: fbToken.firebaseCustomToken,
+      uid: fbToken.uid,
+      expiresIn: fbToken.expiresIn,
+    };
   }
 
   return { ok: true, body };
