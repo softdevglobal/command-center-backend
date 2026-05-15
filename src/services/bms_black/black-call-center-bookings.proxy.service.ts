@@ -1,19 +1,74 @@
-import { blackEndpoint } from "../../config/black-api.js";
+import { blackCallCenterFetch } from "./black-call-center.proxy.util.js";
 
 const BLACK_BOOKINGS_PATH = "/api/call-center/bookings";
 
-/**
- * Proxies to BMS Black `GET /api/call-center/bookings`.
- * `bearer` must be the **Firebase Black** ID token (same as `firebaseIdentityToolkit.idToken` from POST /api/auth/login).
- */
-export async function proxyBlackCallCenterBookings(bearer: string): Promise<Response> {
-  const token = bearer.replace(/^Bearer\s+/i, "").trim();
-  const url = blackEndpoint(BLACK_BOOKINGS_PATH);
-  return fetch(url, {
+/** `GET /api/call-center/bookings` */
+export async function proxyBlackCallCenterBookings(
+  firebaseIdToken: string
+): Promise<Response> {
+  return blackCallCenterFetch(BLACK_BOOKINGS_PATH, firebaseIdToken, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
+  });
+}
+
+/** `GET /api/call-center/bookings/availability` */
+export async function proxyBlackCallCenterBookingAvailability(
+  firebaseIdToken: string,
+  tenantId: string,
+  query: { branchId: string; date: string; serviceIds: string }
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/availability?branchId=${encodeURIComponent(query.branchId)}&date=${encodeURIComponent(query.date)}&serviceIds=${encodeURIComponent(query.serviceIds)}`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "GET",
+    tenantId,
+  });
+}
+
+/** `POST /api/call-center/bookings` */
+export async function proxyBlackCallCenterCreateBooking(
+  firebaseIdToken: string,
+  body: unknown
+): Promise<Response> {
+  return blackCallCenterFetch(BLACK_BOOKINGS_PATH, firebaseIdToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** `GET /api/call-center/bookings/:bookingId` */
+export async function proxyBlackCallCenterBookingById(
+  firebaseIdToken: string,
+  bookingId: string
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}`;
+  return blackCallCenterFetch(path, firebaseIdToken, { method: "GET" });
+}
+
+/** `PATCH /api/call-center/bookings/:bookingId` */
+export async function proxyBlackCallCenterPatchBooking(
+  firebaseIdToken: string,
+  bookingId: string,
+  body: unknown
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /api/call-center/bookings/:bookingId/confirm` */
+export async function proxyBlackCallCenterConfirmBooking(
+  firebaseIdToken: string,
+  bookingId: string,
+  body: unknown
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}/confirm`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }

@@ -41,13 +41,24 @@ router.get("/", (_req, res) => {
       "POST /api/agents/register":
         "Create new agent — super_admin only (Bearer access_token). Delegates to BMS Black so Supabase Auth + agents row + Firebase Black user are created together.",
       "GET /api/bms-black/getallbooking":
-        "Proxy Black bookings — Authorization: Bearer <Supabase access_token>; server uses stored Firebase idToken from login.",
+        "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
+      "GET /api/bms-black/bookings/availability":
+        "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
+      "GET /api/bms-black/staff":
+        "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
+      "POST /api/bms-black/bookings": "Create booking — JSON body forwarded to Black.",
+      "GET /api/bms-black/bookings/:bookingId": "Get booking by id.",
+      "PATCH /api/bms-black/bookings/:bookingId":
+        "Patch booking workflow status (e.g. Confirmed, Canceled).",
+      "POST /api/bms-black/bookings/:bookingId/confirm":
+        "Confirm booking with staff assignments.",
       "GET /api/bms-black/services":
-        "Proxy Black services (all) — Supabase Bearer + X-Tenant-Id; server uses stored Firebase idToken.",
+        "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
       "GET /api/bms-black/services-by-branch":
-        "Proxy Black services for a branch — same auth + required query branchId.",
-      "GET /api/bms-black/services/:id":
-        "Proxy Black single service by id — same auth as /services.",
+        "Services for branch — required query branchId.",
+      "GET /api/bms-black/services/:id": "Get service by id.",
+      "GET /api/bms-black/services/:serviceId/staff":
+        "Staff for service — required query branchId, date.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
     },
   });

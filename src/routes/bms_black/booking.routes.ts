@@ -1,61 +1,184 @@
 import { Router } from "express";
 
 import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
-import type { SupabaseAuthLocals } from "../../middleware/supabase-auth.middleware.js";
-import { getFirebaseIdTokenForSupabaseUser } from "../../services/auth/firebase-black-login.store.js";
-import { proxyBlackCallCenterBookings } from "../../services/bms_black/black-call-center-bookings.proxy.service.js";
+import {
+  proxyBlackCallCenterBookingAvailability,
+  proxyBlackCallCenterBookingById,
+  proxyBlackCallCenterBookings,
+  proxyBlackCallCenterConfirmBooking,
+  proxyBlackCallCenterCreateBooking,
+  proxyBlackCallCenterPatchBooking,
+} from "../../services/bms_black/black-call-center-bookings.proxy.service.js";
+import { proxyBlackCallCenterStaff } from "../../services/bms_black/black-call-center-staff.proxy.service.js";
+import {
+  resolveBlackTenantProxyContext,
+  resolveFirebaseBlackProxyContext,
+  runBlackProxy,
+  singleQuery,
+} from "./black-proxy.helpers.js";
 
 const router = Router();
 
 /**
  * GET /api/bms-black/getallbooking
- *
- * **Frontend:** `Authorization: Bearer <Supabase access_token>` from `POST /api/auth/login`.
- * **Upstream Black:** this server forwards `Authorization: Bearer <stored Firebase idToken>`
- * for the same Supabase user (saved at login when Identity Toolkit succeeds).
+ * Upstream: GET /api/call-center/bookings
  */
 router.get("/getallbooking", attachSupabaseUser, async (_req, res) => {
-  const auth = res.locals.supabaseAuth as SupabaseAuthLocals | undefined;
-  const supabaseUserId = auth?.user?.id;
-  if (!supabaseUserId) {
-    res.status(401).json({ error: "Missing Supabase session." });
-    return;
-  }
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterBookings(ctx.firebaseIdToken)
+  );
+});
 
-  const firebaseIdToken = getFirebaseIdTokenForSupabaseUser(supabaseUserId);
-  if (!firebaseIdToken) {
-    res.status(403).json({
-      error:
-        "No stored Firebase Black idToken for this user. Sign in again with POST /api/auth/login while FIREBASE_BLACK_WEB_API_KEY is set and Firebase accepts the same password.",
+/**
+ * GET /api/bms-black/bookings/availability?branchId=&date=&serviceIds=
+ * Headers: Authorization + X-Tenant-Id (owner uid, same as services routes).
+ * Upstream: GET /api/call-center/bookings/availability
+ */
+router.get(
+  "/bookings/availability",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveBlackTenantProxyContext(req, res);
+    if (!ctx) return;
+
+    const branchId = singleQuery(req.query.branchId);
+    const date = singleQuery(req.query.date);
+    const serviceIds = singleQuery(req.query.serviceIds);
+    if (!branchId || !date || !serviceIds) {
+      res.status(400).json({
+        error:
+          "Missing required query parameters: branchId, date, serviceIds.",
+      });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterBookingAvailability(
+        ctx.firebaseIdToken,
+        ctx.tenantId,
+        { branchId, date, serviceIds }
+      )
+    );
+  }
+);
+
+/**
+ * GET /api/bms-black/staff?branchId=&role=&status=
+ * Headers: Authorization + X-Tenant-Id (owner uid).
+ * Upstream: GET /api/call-center/staff
+ */
+router.get("/staff", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveBlackTenantProxyContext(req, res);
+  if (!ctx) return;
+
+  const branchId = singleQuery(req.query.branchId);
+  if (!branchId) {
+    res.status(400).json({
+      error: "Missing required query parameter branchId.",
     });
     return;
   }
 
-  let upstream: Response;
-  try {
-    upstream = await proxyBlackCallCenterBookings(firebaseIdToken);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Upstream request failed";
-    res.status(502).json({ success: false, error: msg });
+  const staffQuery: {
+    branchId: string;
+    role?: string;
+    status?: string;
+  } = { branchId };
+  const role = singleQuery(req.query.role);
+  const status = singleQuery(req.query.status);
+  if (role) staffQuery.role = role;
+  if (status) staffQuery.status = status;
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterStaff(ctx.firebaseIdToken, ctx.tenantId, staffQuery)
+  );
+});
+
+/**
+ * POST /api/bms-black/bookings
+ * Upstream: POST /api/call-center/bookings
+ */
+router.post("/bookings", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterCreateBooking(ctx.firebaseIdToken, req.body)
+  );
+});
+
+/**
+ * GET /api/bms-black/bookings/:bookingId
+ * Upstream: GET /api/call-center/bookings/:bookingId
+ */
+router.get("/bookings/:bookingId", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const bookingId = String(req.params.bookingId ?? "").trim();
+  if (!bookingId) {
+    res.status(400).json({ error: "Missing booking id." });
     return;
   }
 
-  const text = await upstream.text();
-  const ct = upstream.headers.get("content-type") ?? "";
-  res.status(upstream.status);
-  if (ct.includes("application/json") && text.trim() !== "") {
-    try {
-      res.json(JSON.parse(text) as unknown);
-    } catch {
-      res.type("text/plain").send(text);
-    }
-  } else if (!text.trim()) {
-    res.end();
-  } else {
-    res.type(ct || "text/plain").send(text);
-  }
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterBookingById(ctx.firebaseIdToken, bookingId)
+  );
 });
 
+/**
+ * PATCH /api/bms-black/bookings/:bookingId
+ * Upstream: PATCH /api/call-center/bookings/:bookingId (body: { status })
+ */
+router.patch("/bookings/:bookingId", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const bookingId = String(req.params.bookingId ?? "").trim();
+  if (!bookingId) {
+    res.status(400).json({ error: "Missing booking id." });
+    return;
+  }
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterPatchBooking(
+      ctx.firebaseIdToken,
+      bookingId,
+      req.body
+    )
+  );
+});
+
+/**
+ * POST /api/bms-black/bookings/:bookingId/confirm
+ * Upstream: POST /api/call-center/bookings/:bookingId/confirm
+ */
+router.post(
+  "/bookings/:bookingId/confirm",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveFirebaseBlackProxyContext(res);
+    if (!ctx) return;
+
+    const bookingId = String(req.params.bookingId ?? "").trim();
+    if (!bookingId) {
+      res.status(400).json({ error: "Missing booking id." });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterConfirmBooking(
+        ctx.firebaseIdToken,
+        bookingId,
+        req.body
+      )
+    );
+  }
+);
+
+// 9 reshedule booking
+
+
 export default router;
-
-
