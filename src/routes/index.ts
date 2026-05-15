@@ -5,6 +5,7 @@ import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
+import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -41,6 +42,12 @@ router.get("/", (_req, res) => {
         "Create new agent — super_admin only (Bearer access_token). Delegates to BMS Black so Supabase Auth + agents row + Firebase Black user are created together.",
       "GET /api/bms-black/getallbooking":
         "Proxy Black bookings — Authorization: Bearer <Supabase access_token>; server uses stored Firebase idToken from login.",
+      "GET /api/bms-black/services":
+        "Proxy Black services (all) — Supabase Bearer + X-Tenant-Id; server uses stored Firebase idToken.",
+      "GET /api/bms-black/services-by-branch":
+        "Proxy Black services for a branch — same auth + required query branchId.",
+      "GET /api/bms-black/services/:id":
+        "Proxy Black single service by id — same auth as /services.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
     },
   });
@@ -55,8 +62,9 @@ router.use("/auth", authRoutes);
 /** Register agents — POST /api/agents/register (super_admin Bearer only; Supabase only). */
 router.use("/agents", agentsRoutes);
 
-/** BMS Black proxies (getallbooking uses Supabase Bearer + stored Firebase idToken). */
+/** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
+router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {
