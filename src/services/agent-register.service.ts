@@ -2,7 +2,7 @@ import type { CreateAgentRequestBody } from "../types/agent-registration.types.j
 import {
   registerAgentViaBlack,
   type RegisterAgentViaBlackResult,
-} from "./black/register-agent-via-black.service.js";
+} from "./bms_black/register-agent-via-black.service.js";
 
 /**
  * Delegates agent registration to BMS Pro Black, which performs the full
