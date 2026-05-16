@@ -45,7 +45,7 @@ router.post("/register", async (req, res) => {
       success: true,
       userId,
       message:
-        "Super admin created. Sign in with POST /api/auth/login, then use Bearer access_token on POST /api/agents/register.",
+        "Super admin created. Sign in with POST /api/auth/login, then use Bearer access_token on POST /api/agents/register (or x-setup-secret for local bootstrap).",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Bootstrap failed";

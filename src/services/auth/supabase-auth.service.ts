@@ -7,11 +7,27 @@ import {
 } from "../../db/supabase/supabase.client.js";
 import { signInFirebaseBlackWithPassword } from "./firebase-black-login.service.js";
 import { rememberFirebaseBlackIdentityForUser } from "./firebase-black-login.store.js";
+import { signInFirebasePinkWithPassword } from "./firebase-pink-login.service.js";
 
 export type LoginInput = {
   email: string;
   password: string;
 };
+
+/** Response fragment from Identity Toolkit `accounts:signInWithPassword` (Black or Pink). */
+export type FirebaseIdentityToolkitLogin =
+  | {
+      ok: true;
+      kind?: string | undefined;
+      localId?: string | undefined;
+      email?: string | undefined;
+      displayName?: string | undefined;
+      idToken: string;
+      refreshToken?: string | undefined;
+      expiresIn?: string | undefined;
+      registered?: boolean | undefined;
+    }
+  | { ok: false; error: string };
 
 export type LoginSuccess = {
   access_token: string;
@@ -27,22 +43,13 @@ export type LoginSuccess = {
   roles: string[];
   agentType: string;
   /**
-   * Firebase Identity Toolkit `accounts:signInWithPassword` (bmspro-black Web API key).
-   * Same email/password as this login; the user must exist in Firebase Auth for that project.
+   * Always included in JSON; `ok: true` only when Black Web API key is set and sign-in succeeds.
    */
-  firebaseIdentityToolkit?:
-    | {
-        ok: true;
-        kind?: string | undefined;
-        localId?: string | undefined;
-        email?: string | undefined;
-        displayName?: string | undefined;
-        idToken: string;
-        refreshToken?: string | undefined;
-        expiresIn?: string | undefined;
-        registered?: boolean | undefined;
-      }
-    | { ok: false; error: string };
+  firebaseIdentityToolkit?: FirebaseIdentityToolkitLogin;
+  /**
+   * Always included in JSON; `ok: true` only when Pink Web API key is set and sign-in succeeds.
+   */
+  firebasePinkIdentityToolkit?: FirebaseIdentityToolkitLogin;
 };
 
 function displayNameFromUser(meta: Record<string, unknown> | undefined): string {
@@ -186,6 +193,56 @@ export async function loginWithSupabasePassword(
     } else {
       body.firebaseIdentityToolkit = { ok: false, error: fbPass.message };
     }
+  } else {
+    body.firebaseIdentityToolkit = {
+      ok: false,
+      error:
+        "SKIPPED — set FIREBASE_BLACK_WEB_API_KEY on the Command Center server (.env), then restart. Use the Web API key from Firebase Console → Project settings (Black/bmspro-black project).",
+    };
+  }
+
+  const firebasePinkWebApiKey = (
+    process.env.FIREBASE_PINK_WEB_API_KEY ?? ""
+  ).trim();
+  if (firebasePinkWebApiKey) {
+    const pinkPass = await signInFirebasePinkWithPassword({
+      email: input.email.trim(),
+      password: input.password,
+      webApiKey: firebasePinkWebApiKey,
+    });
+    if (pinkPass.ok) {
+      const idTokenPink = pinkPass.data.idToken;
+      if (idTokenPink) {
+        const pd = pinkPass.data;
+        body.firebasePinkIdentityToolkit = {
+          ok: true,
+          kind: pd.kind,
+          localId: pd.localId,
+          email: pd.email,
+          displayName: pd.displayName,
+          idToken: idTokenPink,
+          refreshToken: pd.refreshToken,
+          expiresIn: pd.expiresIn,
+          registered: pd.registered,
+        };
+      } else {
+        body.firebasePinkIdentityToolkit = {
+          ok: false,
+          error: "Missing idToken in Identity Toolkit response.",
+        };
+      }
+    } else {
+      body.firebasePinkIdentityToolkit = {
+        ok: false,
+        error: pinkPass.message,
+      };
+    }
+  } else {
+    body.firebasePinkIdentityToolkit = {
+      ok: false,
+      error:
+        "SKIPPED — set FIREBASE_PINK_WEB_API_KEY on the Command Center server (.env), then restart. Use the Web API key from Firebase Console → Project settings (Pink/bmspro-pink project).",
+    };
   }
 
   const loginEmailLabel =
@@ -205,7 +262,7 @@ export async function loginWithSupabasePassword(
     const d = body.firebaseIdentityToolkit;
     bannerLines.push(
       "    SUCCESS — same email/password accepted by Firebase.",
-      `    localId: ${d.localId ?? "n/a"}   registered: ${String(d.registered)}   idToken: issued (see JSON body)`
+      `    localId: ${d.localId ?? "n/a"}   registered: ${String(d.registered)}   idToken: issued (see JSON firebaseIdentityToolkit)`
     );
   } else if (body.firebaseIdentityToolkit && body.firebaseIdentityToolkit.ok === false) {
     bannerLines.push(
@@ -214,6 +271,32 @@ export async function loginWithSupabasePassword(
     );
   } else {
     bannerLines.push("    (unexpected — no toolkit result)");
+  }
+
+  bannerLines.push(
+    "3) Google Identity Toolkit (accounts:signInWithPassword, bmspro-pink):"
+  );
+  if (!firebasePinkWebApiKey) {
+    bannerLines.push(
+      "    SKIPPED — FIREBASE_PINK_WEB_API_KEY is empty.",
+      "    -> Add the Pink Web API key to .env (Firebase console → Project settings → Web API key)."
+    );
+  } else if (body.firebasePinkIdentityToolkit?.ok === true) {
+    const p = body.firebasePinkIdentityToolkit;
+    bannerLines.push(
+      "    SUCCESS — same email/password accepted by Firebase Pink.",
+      `    localId: ${p.localId ?? "n/a"}   registered: ${String(p.registered)}   idToken: issued (see JSON firebasePinkIdentityToolkit)`
+    );
+  } else if (
+    body.firebasePinkIdentityToolkit &&
+    body.firebasePinkIdentityToolkit.ok === false
+  ) {
+    bannerLines.push(
+      "    FAILED — Firebase Pink did not return a usable session for this password.",
+      `    -> ${body.firebasePinkIdentityToolkit.error}`
+    );
+  } else {
+    bannerLines.push("    (unexpected — no Pink toolkit result)");
   }
   logBmsLoginTerminalBanner(bannerLines);
 

@@ -36,10 +36,10 @@ router.get("/", (_req, res) => {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
       "POST /api/auth/login":
-        "Sign in — Supabase session; if FIREBASE_BLACK_WEB_API_KEY is set, also Identity Toolkit password sign-in (firebaseIdentityToolkit + server banner).",
+        "Sign in — Supabase session; optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
-        "Create new agent — super_admin only (Bearer access_token). Delegates to BMS Black so Supabase Auth + agents row + Firebase Black user are created together.",
+        "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
       "GET /api/bms-black/getallbooking":
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
@@ -70,7 +70,7 @@ router.use("/super-admin", superAdminRoutes);
 /** Login + session profile — /api/auth/* */
 router.use("/auth", authRoutes);
 
-/** Register agents — POST /api/agents/register (super_admin Bearer only; Supabase only). */
+/** Register agents — POST /api/agents/register (Bearer super-admin OR x-setup-secret + SETUP_SECRET_KEY). */
 router.use("/agents", agentsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */

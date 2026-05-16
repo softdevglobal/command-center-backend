@@ -17,9 +17,10 @@ const router = Router();
  *
  * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Google Identity Toolkit
  * `accounts:signInWithPassword` for bmspro-black (same email/password).
+ * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink (`firebasePinkIdentityToolkit`).
  * After each successful login the **server terminal** prints a bordered
  * `[BMS LOGIN]` summary (Supabase + Firebase SUCCESS / FAILED / SKIPPED).
- * The JSON body may include `firebaseIdentityToolkit`.
+ * The JSON body may include `firebaseIdentityToolkit` and `firebasePinkIdentityToolkit`.
  */
 router.post("/login", async (req, res) => {
   const body = req.body as { email?: string; password?: string };
