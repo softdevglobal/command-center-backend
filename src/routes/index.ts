@@ -4,6 +4,7 @@ import { getFirebaseBlackApp } from "../db/firebase/firebase.black.js";
 import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
+import didMappingsRoutes from "./did-mappings.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
@@ -60,6 +61,15 @@ router.get("/", (_req, res) => {
       "GET /api/bms-black/services/:serviceId/staff":
         "Staff for service — required query branchId, date.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
+      "GET /api/did-mappings":
+        "List DID→queue mappings (super-admin Bearer OR x-setup-secret); optional ?tenantId=&queueId=",
+      "GET /api/did-mappings/:did": "Get one mapping by DID (URL-encode + if needed)",
+      "POST /api/did-mappings":
+        "Create DID mapping { did, label, tenantId, queueId, ownerUid, workshopName, branchId, branchName } — same auth as GET",
+      "PATCH /api/did-mappings/:did":
+        "Partial update — did fixed in URL; send any of label, tenantId, queueId, ownerUid, workshopName, branchId, branchName",
+      "DELETE /api/did-mappings/:did":
+        "Delete DID mapping by primary key — same auth as GET (URL-encode + if needed)",
     },
   });
 });
@@ -72,6 +82,9 @@ router.use("/auth", authRoutes);
 
 /** Register agents — POST /api/agents/register (Bearer super-admin OR x-setup-secret + SETUP_SECRET_KEY). */
 router.use("/agents", agentsRoutes);
+
+/** DID → tenant / queue — Supabase `did_mappings` (same auth pattern as agents register). */
+router.use("/did-mappings", didMappingsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
