@@ -5,6 +5,7 @@ import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
 import didMappingsRoutes from "./did-mappings.routes.js";
+import systemAuditLogsRoutes from "./system-audit-logs.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
@@ -70,6 +71,9 @@ router.get("/", (_req, res) => {
         "Partial update — did fixed in URL; send any of label, tenantId, queueId, ownerUid, workshopName, branchId, branchName",
       "DELETE /api/did-mappings/:did":
         "Delete DID mapping by primary key — same auth as GET (URL-encode + if needed)",
+      "GET /api/system-audit-logs":
+        "List audit logs (super-admin Bearer OR x-setup-secret); ?userId=&action=&resourceType=&resourceId=&from=&to=&limit=&offset=",
+      "GET /api/system-audit-logs/:id": "Get one audit log by UUID",
     },
   });
 });
@@ -85,6 +89,9 @@ router.use("/agents", agentsRoutes);
 
 /** DID → tenant / queue — Supabase `did_mappings` (same auth pattern as agents register). */
 router.use("/did-mappings", didMappingsRoutes);
+
+/** System audit trail — Supabase `system_audit_logs` (super-admin or x-setup-secret). */
+router.use("/system-audit-logs", systemAuditLogsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
