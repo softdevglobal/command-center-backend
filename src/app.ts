@@ -1,3 +1,4 @@
+import "./dotenv-quiet-preflight.js";
 import "./env-bootstrap.js";
 
 import express from "express";
@@ -10,7 +11,11 @@ import routes from "./routes/index.js";
 const app = express();
 
 app.use(cors());
-app.use(helmet());
+if (process.env.DISABLE_HELMET === "true") {
+  console.warn("[app] DISABLE_HELMET=true — helmet middleware skipped");
+} else {
+  app.use(helmet({ contentSecurityPolicy: false }));
+}
 app.use(morgan("dev"));
 app.use(express.json());
 

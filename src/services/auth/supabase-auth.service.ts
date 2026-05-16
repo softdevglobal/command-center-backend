@@ -5,6 +5,8 @@ import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
 } from "../../db/supabase/supabase.client.js";
+import { signInFirebaseBlackWithPassword } from "./firebase-black-login.service.js";
+import { rememberFirebaseBlackIdentityForUser } from "./firebase-black-login.store.js";
 
 export type LoginInput = {
   email: string;
@@ -24,6 +26,23 @@ export type LoginSuccess = {
   };
   roles: string[];
   agentType: string;
+  /**
+   * Firebase Identity Toolkit `accounts:signInWithPassword` (bmspro-black Web API key).
+   * Same email/password as this login; the user must exist in Firebase Auth for that project.
+   */
+  firebaseIdentityToolkit?:
+    | {
+        ok: true;
+        kind?: string | undefined;
+        localId?: string | undefined;
+        email?: string | undefined;
+        displayName?: string | undefined;
+        idToken: string;
+        refreshToken?: string | undefined;
+        expiresIn?: string | undefined;
+        registered?: boolean | undefined;
+      }
+    | { ok: false; error: string };
 };
 
 function displayNameFromUser(meta: Record<string, unknown> | undefined): string {
@@ -51,10 +70,28 @@ async function fetchRoles(userId: string): Promise<string[]> {
   return data.map((row: { role: string }) => row.role).filter(Boolean);
 }
 
+/** Visible summary in the server terminal after each successful HTTP login. */
+function logBmsLoginTerminalBanner(lines: readonly string[]): void {
+  const bar =
+    "===========================================================";
+  console.log("");
+  console.log(bar);
+  console.log("  [BMS LOGIN]  POST /api/auth/login  (automatic pipeline)");
+  console.log(bar);
+  for (const line of lines) {
+    console.log(`  ${line}`);
+  }
+  console.log(bar);
+  console.log("");
+}
+
 /** Email/password against Supabase Auth; returns session tokens + roles from `user_roles`. */
 export async function loginWithSupabasePassword(
   input: LoginInput
-): Promise<{ ok: true; body: LoginSuccess } | { ok: false; message: string }> {
+): Promise<
+  | { ok: true; body: LoginSuccess }
+  | { ok: false; message: string; networkError?: boolean }
+> {
   const url = getSupabaseProjectUrl();
   const anon = getSupabaseAnonKeyForEdge();
 
@@ -73,9 +110,17 @@ export async function loginWithSupabasePassword(
   });
 
   if (error || !data.session || !data.user) {
+    const raw = error?.message ?? "Login failed.";
+    const networkLike =
+      /fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|getaddrinfo|network|Name resolution/i.test(
+        raw
+      );
     return {
       ok: false,
-      message: error?.message ?? "Login failed.",
+      message: networkLike
+        ? `${raw} — cannot reach Supabase (check internet / DNS / VPN). Login does not use JWT_SECRET.`
+        : raw,
+      networkError: networkLike,
     };
   }
 
@@ -102,6 +147,75 @@ export async function loginWithSupabasePassword(
   if (data.session.expires_at !== undefined) {
     body.expires_at = data.session.expires_at;
   }
+
+  const firebaseWebApiKey = (
+    process.env.FIREBASE_BLACK_WEB_API_KEY ?? ""
+  ).trim();
+  if (firebaseWebApiKey) {
+    const fbPass = await signInFirebaseBlackWithPassword({
+      email: input.email.trim(),
+      password: input.password,
+      webApiKey: firebaseWebApiKey,
+    });
+    if (fbPass.ok) {
+      const idToken = fbPass.data.idToken;
+      if (idToken) {
+        const d = fbPass.data;
+        rememberFirebaseBlackIdentityForUser({
+          supabaseUserId: data.user.id,
+          idToken,
+          email: d.email ?? input.email.trim(),
+        });
+        body.firebaseIdentityToolkit = {
+          ok: true,
+          kind: d.kind,
+          localId: d.localId,
+          email: d.email,
+          displayName: d.displayName,
+          idToken,
+          refreshToken: d.refreshToken,
+          expiresIn: d.expiresIn,
+          registered: d.registered,
+        };
+      } else {
+        body.firebaseIdentityToolkit = {
+          ok: false,
+          error: "Missing idToken in Identity Toolkit response.",
+        };
+      }
+    } else {
+      body.firebaseIdentityToolkit = { ok: false, error: fbPass.message };
+    }
+  }
+
+  const loginEmailLabel =
+    data.user.email ?? userOut.email ?? input.email.trim();
+  const bannerLines: string[] = [
+    "1) Supabase Auth: SUCCESS",
+    `    user id: ${data.user.id}`,
+    `    email:   ${loginEmailLabel}`,
+    "2) Google Identity Toolkit (accounts:signInWithPassword, bmspro-black):",
+  ];
+  if (!firebaseWebApiKey) {
+    bannerLines.push(
+      "    SKIPPED — FIREBASE_BLACK_WEB_API_KEY is empty.",
+      "    -> Add the Web API key to .env and restart the server to auto-call Identity Toolkit."
+    );
+  } else if (body.firebaseIdentityToolkit?.ok === true) {
+    const d = body.firebaseIdentityToolkit;
+    bannerLines.push(
+      "    SUCCESS — same email/password accepted by Firebase.",
+      `    localId: ${d.localId ?? "n/a"}   registered: ${String(d.registered)}   idToken: issued (see JSON body)`
+    );
+  } else if (body.firebaseIdentityToolkit && body.firebaseIdentityToolkit.ok === false) {
+    bannerLines.push(
+      "    FAILED — Firebase did not return a usable session for this password.",
+      `    -> ${body.firebaseIdentityToolkit.error}`
+    );
+  } else {
+    bannerLines.push("    (unexpected — no toolkit result)");
+  }
+  logBmsLoginTerminalBanner(bannerLines);
 
   return { ok: true, body };
 }

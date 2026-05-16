@@ -14,6 +14,12 @@ const router = Router();
  *
  * Works for **super admins** and **agents** (any Supabase user with credentials).
  * Response includes access_token — send as Authorization: Bearer for protected routes.
+ *
+ * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Google Identity Toolkit
+ * `accounts:signInWithPassword` for bmspro-black (same email/password).
+ * After each successful login the **server terminal** prints a bordered
+ * `[BMS LOGIN]` summary (Supabase + Firebase SUCCESS / FAILED / SKIPPED).
+ * The JSON body may include `firebaseIdentityToolkit`.
  */
 router.post("/login", async (req, res) => {
   const body = req.body as { email?: string; password?: string };
@@ -28,7 +34,9 @@ router.post("/login", async (req, res) => {
   });
 
   if (!result.ok) {
-    res.status(401).json({ error: result.message });
+    const status =
+      "networkError" in result && result.networkError ? 503 : 401;
+    res.status(status).json({ error: result.message });
     return;
   }
 

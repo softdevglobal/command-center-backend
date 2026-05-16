@@ -4,6 +4,8 @@ import { getFirebaseBlackApp } from "../db/firebase/firebase.black.js";
 import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
+import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
+import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -12,17 +14,51 @@ import {
 
 const router = Router();
 
-router.get("/", (req, res) => {
+/** Default local port (matches server.ts). macOS uses :5000 for AirPlay — never default to 5000. */
+function advertisedPort(): number {
+  const n = Number(process.env.PORT);
+  return Number.isFinite(n) && n > 0 ? n : 5050;
+}
+
+router.get("/", (_req, res) => {
+  const port = advertisedPort();
   res.json({
     success: true,
     message: "Command Center Backend Running",
+    listen: {
+      port,
+      apiBase: `http://127.0.0.1:${port}/api`,
+      loginUrl: `http://127.0.0.1:${port}/api/auth/login`,
+      note:
+        "On macOS, http://127.0.0.1:5000 is usually AirPlay (ControlCenter), not this app — it returns 403. Use listen.port / loginUrl from THIS response.",
+    },
     apis: {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
-      "POST /api/auth/login": "Sign in — super admin or agent; returns access_token",
+      "POST /api/auth/login":
+        "Sign in — Supabase session; if FIREBASE_BLACK_WEB_API_KEY is set, also Identity Toolkit password sign-in (firebaseIdentityToolkit + server banner).",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
-        "Create new agent — super_admin only (Bearer access_token); agents stored in Supabase only",
+        "Create new agent — super_admin only (Bearer access_token). Delegates to BMS Black so Supabase Auth + agents row + Firebase Black user are created together.",
+      "GET /api/bms-black/getallbooking":
+        "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
+      "GET /api/bms-black/bookings/availability":
+        "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
+      "GET /api/bms-black/staff":
+        "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
+      "POST /api/bms-black/bookings": "Create booking — JSON body forwarded to Black.",
+      "GET /api/bms-black/bookings/:bookingId": "Get booking by id.",
+      "PATCH /api/bms-black/bookings/:bookingId":
+        "Patch booking workflow status (e.g. Confirmed, Canceled).",
+      "POST /api/bms-black/bookings/:bookingId/confirm":
+        "Confirm booking with staff assignments.",
+      "GET /api/bms-black/services":
+        "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
+      "GET /api/bms-black/services-by-branch":
+        "Services for branch — required query branchId.",
+      "GET /api/bms-black/services/:id": "Get service by id.",
+      "GET /api/bms-black/services/:serviceId/staff":
+        "Staff for service — required query branchId, date.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
     },
   });
@@ -36,6 +72,10 @@ router.use("/auth", authRoutes);
 
 /** Register agents — POST /api/agents/register (super_admin Bearer only; Supabase only). */
 router.use("/agents", agentsRoutes);
+
+/** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
+router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
+router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {
