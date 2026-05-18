@@ -5,6 +5,8 @@ import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
+import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
+import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
@@ -46,10 +48,12 @@ router.get("/", (_req, res) => {
         "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
       "GET /api/bms-black/staff":
         "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
-      "POST /api/bms-black/bookings": "Create booking — JSON body forwarded to Black.",
-      "GET /api/bms-black/bookings/:bookingId": "Get booking by id.",
+      "POST /api/bms-black/bookings":
+        "Create booking — Supabase Bearer + X-Tenant-Id (owner uid); JSON body forwarded to Black.",
+      "GET /api/bms-black/bookings/:bookingId":
+        "Get booking by id — Supabase Bearer + X-Tenant-Id.",
       "PATCH /api/bms-black/bookings/:bookingId":
-        "Patch booking workflow status (e.g. Confirmed, Canceled).",
+        "Patch booking workflow status — Supabase Bearer + X-Tenant-Id; body { status: Confirmed|Canceled }.",
       "POST /api/bms-black/bookings/:bookingId/confirm":
         "Confirm booking with staff assignments.",
       "PATCH /api/bms-black/bookings/:bookingId/reschedule":
@@ -59,7 +63,25 @@ router.get("/", (_req, res) => {
       "GET /api/bms-black/bookings/:bookingId/additional-issues":
         "List additional issues for a booking.",
       "PATCH /api/bms-black/bookings/:bookingId/additional-issues/:issueId":
-        "Update issue decision — body customerResponse accept|reject.",
+        "Customer issue response — body customerResponse accept|reject; optional X-Tenant-Id.",
+      "PATCH /api/bms-black/bookings/:bookingId/additional-issues/:issueId/price":
+        "Workshop price approve/reject — body status approved|rejected; optional X-Tenant-Id.",
+      "GET /api/bms-black/customer-notifications":
+        "All call-center notifications — optional query all=1; Supabase Bearer + stored Firebase token.",
+      "POST /api/bms-black/customer-notifications/:notificationId/notification-reviewed":
+        "Mark/unmark notification reviewed — body notificationReviewed true|false.",
+      "POST /api/bms-black/customer-notifications/:notificationId/called-customer":
+        "Log that customer was called.",
+      "GET /api/bms-black/agent/conversations":
+        "Support chat queue + mine — optional query queueLimit, mineLimit, ownerUid, tenantId; optional X-Tenant-Id.",
+      "GET /api/bms-black/agent/conversations/:conversationId/messages":
+        "Chat messages — optional query limit, before.",
+      "POST /api/bms-black/agent/conversations/:conversationId/messages":
+        "Send agent message — body { message }.",
+      "POST /api/bms-black/agent/conversations/:conversationId/claim": "Claim conversation.",
+      "POST /api/bms-black/agent/conversations/:conversationId/read": "Mark conversation read.",
+      "POST /api/bms-black/agent/conversations/:conversationId/close":
+        "Close conversation — optional body { farewellMessage }.",
       "GET /api/bms-black/services":
         "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
       "GET /api/bms-black/services-by-branch":
@@ -83,6 +105,8 @@ router.use("/agents", agentsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
+router.use("/bms-black", bmsBlackCallCenterNotificationsRoutes);
+router.use("/bms-black", bmsBlackSupportChatRoutes);
 router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
