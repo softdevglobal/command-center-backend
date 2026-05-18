@@ -6,6 +6,7 @@ import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
 import didMappingsRoutes from "./did-mappings.routes.js";
 import systemAuditLogsRoutes from "./system-audit-logs.routes.js";
+import callsRoutes from "./calls.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
@@ -74,6 +75,9 @@ router.get("/", (_req, res) => {
       "GET /api/system-audit-logs":
         "List audit logs (super-admin Bearer OR x-setup-secret); ?userId=&action=&resourceType=&resourceId=&from=&to=&limit=&offset=",
       "GET /api/system-audit-logs/:id": "Get one audit log by UUID",
+      "GET /api/calls":
+        "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
+      "GET /api/calls/:id": "Get one call — same access rules as list",
     },
   });
 });
@@ -92,6 +96,9 @@ router.use("/did-mappings", didMappingsRoutes);
 
 /** System audit trail — Supabase `system_audit_logs` (super-admin or x-setup-secret). */
 router.use("/system-audit-logs", systemAuditLogsRoutes);
+
+/** Call history — Supabase `calls` (super admin or agent Bearer). */
+router.use("/calls", callsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
