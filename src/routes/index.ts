@@ -52,6 +52,14 @@ router.get("/", (_req, res) => {
         "Patch booking workflow status (e.g. Confirmed, Canceled).",
       "POST /api/bms-black/bookings/:bookingId/confirm":
         "Confirm booking with staff assignments.",
+      "PATCH /api/bms-black/bookings/:bookingId/reschedule":
+        "Reschedule booking — body newDate, newTime, reason.",
+      "POST /api/bms-black/bookings/:bookingId/cancel":
+        "Cancel booking — body reason.",
+      "GET /api/bms-black/bookings/:bookingId/additional-issues":
+        "List additional issues for a booking.",
+      "PATCH /api/bms-black/bookings/:bookingId/additional-issues/:issueId":
+        "Update issue decision — body customerResponse accept|reject.",
       "GET /api/bms-black/services":
         "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
       "GET /api/bms-black/services-by-branch":

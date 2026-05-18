@@ -2,12 +2,16 @@ import { Router } from "express";
 
 import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
 import {
+  proxyBlackCallCenterBookingAdditionalIssues,
   proxyBlackCallCenterBookingAvailability,
   proxyBlackCallCenterBookingById,
   proxyBlackCallCenterBookings,
+  proxyBlackCallCenterCancelBooking,
   proxyBlackCallCenterConfirmBooking,
   proxyBlackCallCenterCreateBooking,
   proxyBlackCallCenterPatchBooking,
+  proxyBlackCallCenterPatchBookingIssue,
+  proxyBlackCallCenterRescheduleBooking,
 } from "../../services/bms_black/black-call-center-bookings.proxy.service.js";
 import { proxyBlackCallCenterStaff } from "../../services/bms_black/black-call-center-staff.proxy.service.js";
 import {
@@ -110,6 +114,119 @@ router.post("/bookings", attachSupabaseUser, async (req, res) => {
 });
 
 /**
+ * PATCH /api/bms-black/bookings/:bookingId/reschedule
+ * Upstream: PATCH /api/call-center/bookings/:bookingId/reschedule
+ */
+router.patch(
+  "/bookings/:bookingId/reschedule",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveFirebaseBlackProxyContext(res);
+    if (!ctx) return;
+
+    const bookingId = String(req.params.bookingId ?? "").trim();
+    if (!bookingId) {
+      res.status(400).json({ error: "Missing booking id." });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterRescheduleBooking(
+        ctx.firebaseIdToken,
+        bookingId,
+        req.body
+      )
+    );
+  }
+);
+
+/**
+ * POST /api/bms-black/bookings/:bookingId/cancel
+ * Upstream: POST /api/call-center/bookings/:bookingId/cancel
+ */
+router.post(
+  "/bookings/:bookingId/cancel",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveFirebaseBlackProxyContext(res);
+    if (!ctx) return;
+
+    const bookingId = String(req.params.bookingId ?? "").trim();
+    if (!bookingId) {
+      res.status(400).json({ error: "Missing booking id." });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterCancelBooking(
+        ctx.firebaseIdToken,
+        bookingId,
+        req.body
+      )
+    );
+  }
+);
+
+/**
+ * GET /api/bms-black/bookings/:bookingId/additional-issues
+ * Upstream: GET /api/call-center/bookings/:bookingId/additional-issues
+ */
+router.get(
+  "/bookings/:bookingId/additional-issues",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveFirebaseBlackProxyContext(res);
+    if (!ctx) return;
+
+    const bookingId = String(req.params.bookingId ?? "").trim();
+    if (!bookingId) {
+      res.status(400).json({ error: "Missing booking id." });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterBookingAdditionalIssues(
+        ctx.firebaseIdToken,
+        bookingId
+      )
+    );
+  }
+);
+
+/**
+ * PATCH /api/bms-black/bookings/:bookingId/additional-issues/:issueId
+ * Upstream: PATCH /api/call-center/bookings/:bookingId/additional-issues/:issueId
+ */
+router.patch(
+  "/bookings/:bookingId/additional-issues/:issueId",
+  attachSupabaseUser,
+  async (req, res) => {
+    const ctx = resolveFirebaseBlackProxyContext(res);
+    if (!ctx) return;
+
+    const bookingId = String(req.params.bookingId ?? "").trim();
+    const issueId = String(req.params.issueId ?? "").trim();
+    if (!bookingId) {
+      res.status(400).json({ error: "Missing booking id." });
+      return;
+    }
+    if (!issueId) {
+      res.status(400).json({ error: "Missing issue id." });
+      return;
+    }
+
+    await runBlackProxy(res, () =>
+      proxyBlackCallCenterPatchBookingIssue(
+        ctx.firebaseIdToken,
+        bookingId,
+        issueId,
+        req.body
+      )
+    );
+  }
+);
+
+/**
  * GET /api/bms-black/bookings/:bookingId
  * Upstream: GET /api/call-center/bookings/:bookingId
  */
@@ -177,8 +294,5 @@ router.post(
     );
   }
 );
-
-// 9 reshedule booking
-
 
 export default router;

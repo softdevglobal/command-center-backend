@@ -72,3 +72,55 @@ export async function proxyBlackCallCenterConfirmBooking(
     body: JSON.stringify(body),
   });
 }
+
+/** `PATCH /api/call-center/bookings/:bookingId/reschedule` */
+export async function proxyBlackCallCenterRescheduleBooking(
+  firebaseIdToken: string,
+  bookingId: string,
+  body: unknown
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}/reschedule`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** `POST /api/call-center/bookings/:bookingId/cancel` */
+export async function proxyBlackCallCenterCancelBooking(
+  firebaseIdToken: string,
+  bookingId: string,
+  body: unknown
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}/cancel`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** `GET /api/call-center/bookings/:bookingId/additional-issues` */
+export async function proxyBlackCallCenterBookingAdditionalIssues(
+  firebaseIdToken: string,
+  bookingId: string
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}/additional-issues`;
+  return blackCallCenterFetch(path, firebaseIdToken, { method: "GET" });
+}
+
+/** `PATCH /api/call-center/bookings/:bookingId/additional-issues/:issueId` */
+export async function proxyBlackCallCenterPatchBookingIssue(
+  firebaseIdToken: string,
+  bookingId: string,
+  issueId: string,
+  body: unknown
+): Promise<Response> {
+  const path = `${BLACK_BOOKINGS_PATH}/${encodeURIComponent(bookingId.trim())}/additional-issues/${encodeURIComponent(issueId.trim())}`;
+  return blackCallCenterFetch(path, firebaseIdToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
