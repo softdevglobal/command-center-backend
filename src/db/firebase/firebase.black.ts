@@ -4,7 +4,7 @@ import { resolveFirebaseServiceAccount } from "./firebase.helpers.js";
 
 let cached: admin.app.App | null | undefined;
 
-/** bmspro-black — connectivity only; agents are not written here. */
+/** bmspro-black — Admin SDK for Auth + Firestore (e.g. `call_center_agents`). */
 export function getFirebaseBlackApp(): admin.app.App | null {
   if (cached !== undefined) return cached;
 
