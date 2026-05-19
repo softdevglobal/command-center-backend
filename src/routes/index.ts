@@ -8,6 +8,7 @@ import didMappingsRoutes from "./did-mappings.routes.js";
 import systemAuditLogsRoutes from "./system-audit-logs.routes.js";
 import callsRoutes from "./calls.routes.js";
 import agentChatRoutes from "./agent-chat.routes.js";
+import agentAttendanceRoutes from "./agent-attendance.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -120,6 +121,15 @@ router.get("/", (_req, res) => {
         "Send message — body { content, selfAgentId? }; must be a conversation participant",
       "POST /api/agent-chat/conversations/:id/read":
         "Mark peer messages read — body optional { selfAgentId }; returns { marked }",
+      "GET /api/agent-attendance/status":
+        "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
+      "GET /api/agent-attendance/reports":
+        "Attendance summary — ?groupBy=day|week|month&from=YYYY-MM-DD&to=YYYY-MM-DD; super admin: all agents (+ optional agentId); agent: own only. Returns total_days, total_working_hours, avg_hours_per_day per period",
+      "GET /api/agent-attendance/events":
+        "List attendance events — agent: own only; super admin: ?agentId= or ?userId= plus tenantId, eventType, from, to, limit, offset",
+      "POST /api/agent-attendance/events":
+        "Record clock_in|break_start|break_end|clock_out — body { eventType, agentId?|userId?, tenantId?, occurredAt?, agentDisplayName? }; validates state transitions (409 on invalid)",
+      "GET /api/agent-attendance/events/:id": "Get one attendance event — agent: own only",
     },
   });
 });
@@ -144,6 +154,9 @@ router.use("/calls", callsRoutes);
 
 /** Internal agent chat — Supabase `agent_conversations` + `agent_messages`. */
 router.use("/agent-chat", agentChatRoutes);
+
+/** Agent clock-in/out and breaks — Supabase `agent_attendance_events`. */
+router.use("/agent-attendance", agentAttendanceRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
