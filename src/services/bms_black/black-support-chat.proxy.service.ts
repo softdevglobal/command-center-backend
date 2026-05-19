@@ -1,5 +1,6 @@
 import { blackCallCenterFetch } from "./black-call-center.proxy.util.js";
 
+/** Black support-chat agent API base (see `BLACK_API_BASE_URL` for host override). */
 const SUPPORT_CHAT_AGENT = "/api/support-chat/agent";
 
 function appendQuery(
@@ -14,7 +15,11 @@ function appendQuery(
   return qs ? `${path}?${qs}` : path;
 }
 
-/** `GET /api/support-chat/agent/conversations` */
+/**
+ * GET /api/bms-black/agent/conversations?queueLimit=&mineLimit=&ownerUid=&tenantId=
+ * Upstream: GET https://black.bmspros.com.au/api/support-chat/agent/conversations
+ * `X-Tenant-Id` header optional (from request header when provided).
+ */
 export async function proxyBlackSupportChatConversations(
   firebaseIdToken: string,
   query: {
@@ -36,7 +41,10 @@ export async function proxyBlackSupportChatConversations(
   return blackCallCenterFetch(path, firebaseIdToken, init);
 }
 
-/** `GET /api/support-chat/agent/conversations/:conversationId/messages` */
+/**
+ * GET /api/bms-black/agent/conversations/:conversationId/messages?limit=&before=
+ * Upstream: GET https://black.bmspros.com.au/api/support-chat/agent/conversations/:conversationId/messages
+ */
 export async function proxyBlackSupportChatMessages(
   firebaseIdToken: string,
   conversationId: string,
@@ -50,7 +58,10 @@ export async function proxyBlackSupportChatMessages(
   return blackCallCenterFetch(path, firebaseIdToken, { method: "GET" });
 }
 
-/** `POST /api/support-chat/agent/conversations/:conversationId/messages` */
+/**
+ * POST /api/bms-black/agent/conversations/:conversationId/messages
+ * Upstream: POST https://black.bmspros.com.au/api/support-chat/agent/conversations/:conversationId/messages
+ */
 export async function proxyBlackSupportChatSendMessage(
   firebaseIdToken: string,
   conversationId: string,
@@ -64,7 +75,10 @@ export async function proxyBlackSupportChatSendMessage(
   });
 }
 
-/** `POST /api/support-chat/agent/conversations/:conversationId/claim` */
+/**
+ * POST /api/bms-black/agent/conversations/:conversationId/claim
+ * Upstream: POST https://black.bmspros.com.au/api/support-chat/agent/conversations/:conversationId/claim
+ */
 export async function proxyBlackSupportChatClaimConversation(
   firebaseIdToken: string,
   conversationId: string,
@@ -78,7 +92,10 @@ export async function proxyBlackSupportChatClaimConversation(
   });
 }
 
-/** `POST /api/support-chat/agent/conversations/:conversationId/read` */
+/**
+ * POST /api/bms-black/agent/conversations/:conversationId/read
+ * Upstream: POST https://black.bmspros.com.au/api/support-chat/agent/conversations/:conversationId/read
+ */
 export async function proxyBlackSupportChatMarkRead(
   firebaseIdToken: string,
   conversationId: string
@@ -91,7 +108,10 @@ export async function proxyBlackSupportChatMarkRead(
   });
 }
 
-/** `POST /api/support-chat/agent/conversations/:conversationId/close` */
+/**
+ * POST /api/bms-black/agent/conversations/:conversationId/close
+ * Upstream: POST https://black.bmspros.com.au/api/support-chat/agent/conversations/:conversationId/close
+ */
 export async function proxyBlackSupportChatCloseConversation(
   firebaseIdToken: string,
   conversationId: string,

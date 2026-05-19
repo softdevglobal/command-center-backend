@@ -10,6 +10,11 @@ import {
   proxyBlackSupportChatSendMessage,
 } from "../../services/bms_black/black-support-chat.proxy.service.js";
 import {
+  proxyBlackCallCenterChatSendMessage,
+  proxyBlackCallCenterChatStartWithOwner,
+  proxyBlackCallCenterChatWorkshopOwners,
+} from "../../services/bms_black/black-call-center-chats.proxy.service.js";
+import {
   optionalTenantId,
   resolveFirebaseBlackProxyContext,
   runBlackProxy,
@@ -194,5 +199,80 @@ router.post(
     );
   }
 );
+
+function chatIdParam(raw: unknown): string {
+  return String(raw ?? "").trim();
+}
+
+/**
+ * GET /api/bms-black/chats/workshop-owners
+ * Upstream: GET https://black.bmspros.com.au/api/call-center/chats/workshop-owners
+ * Headers: Authorization (Supabase Bearer); optional X-Tenant-Id.
+ */
+router.get("/chats/workshop-owners", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatWorkshopOwners(
+      ctx.firebaseIdToken,
+      optionalTenantId(req)
+    )
+  );
+});
+
+/**
+ * POST /api/bms-black/chats/start-with-owner
+ * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/start-with-owner
+ * Body: `{ "workshopOwnerUid": "<owner Firebase uid>", "text": "optional first message" }`
+ * Headers: Authorization; optional X-Tenant-Id.
+ */
+router.post("/chats/start-with-owner", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const body =
+    req.body && typeof req.body === "object"
+      ? (req.body as { workshopOwnerUid?: string })
+      : {};
+  if (!String(body.workshopOwnerUid ?? "").trim()) {
+    res.status(400).json({ error: "Missing required body field workshopOwnerUid." });
+    return;
+  }
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatStartWithOwner(
+      ctx.firebaseIdToken,
+      req.body,
+      optionalTenantId(req)
+    )
+  );
+});
+
+/**
+ * POST /api/bms-black/chats/:chatId/messages
+ * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/:chatId/messages
+ * Body: `{ "text": "Thank you for contacting us." }`
+ * Headers: Authorization; optional X-Tenant-Id.
+ */
+router.post("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const chatId = chatIdParam(req.params.chatId);
+  if (!chatId) {
+    res.status(400).json({ error: "Missing chat id." });
+    return;
+  }
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatSendMessage(
+      ctx.firebaseIdToken,
+      chatId,
+      req.body,
+      optionalTenantId(req)
+    )
+  );
+});
 
 export default router;
