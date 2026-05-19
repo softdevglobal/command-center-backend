@@ -1,17 +1,17 @@
 import { Router } from "express";
 
-import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
-import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
-import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
+import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
+import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
+import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
 import {
   agentMayViewCall,
   getCallById,
   listCalls,
   toPublicCall,
   toPublicCalls,
-} from "../services/calls.service.js";
-import { resolveAgentIdForUserViaSupabase } from "../services/shared/calls.pipeline.js";
-import type { CallDirection, CallListFilters } from "../types/call.types.js";
+} from "../../services/calls.service.js";
+import { resolveAgentIdForUserViaSupabase } from "../../services/shared/calls.pipeline.js";
+import type { CallDirection, CallListFilters } from "../../types/call.types.js";
 
 const router = Router();
 

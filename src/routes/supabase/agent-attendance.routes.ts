@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
-import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
-import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
+import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
+import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
+import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
 import {
   getAgentAttendanceEventById,
   getAgentAttendanceReport,
@@ -10,16 +10,16 @@ import {
   listAgentAttendanceEvents,
   recordAgentAttendanceEvent,
   userMayViewAttendanceEvent,
-} from "../services/agent-attendance.service.js";
-import { enrichAttendanceCreateInput } from "../services/shared/agent-attendance-enrichment.js";
-import { resolveAttendanceTarget } from "../services/shared/agent-attendance-target.js";
-import { isAgentAttendanceEventType } from "../services/shared/supabase-agent-attendance.service.js";
+} from "../../services/agent-attendance.service.js";
+import { enrichAttendanceCreateInput } from "../../services/shared/agent-attendance-enrichment.js";
+import { resolveAttendanceTarget } from "../../services/shared/agent-attendance-target.js";
+import { isAgentAttendanceEventType } from "../../services/shared/supabase-agent-attendance.service.js";
 import type {
   AgentAttendanceEventType,
   AgentAttendanceListFilters,
   AgentAttendanceReportFilters,
   AgentAttendanceReportGroupBy,
-} from "../types/agent-attendance.types.js";
+} from "../../types/agent-attendance.types.js";
 
 const router = Router();
 

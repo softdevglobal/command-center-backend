@@ -1,8 +1,8 @@
 import { Router } from "express";
 
-import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
-import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
-import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
+import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
+import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
+import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
 import {
   agentMayAccessConversation,
   getConversationById,
@@ -12,14 +12,14 @@ import {
   markConversationRead,
   resolveChatActorAgentId,
   sendMessage,
-} from "../services/agent-chat.service.js";
-import { resolveAgentIdForUserViaSupabase } from "../services/shared/agent-chat.pipeline.js";
+} from "../../services/agent-chat.service.js";
+import { resolveAgentIdForUserViaSupabase } from "../../services/shared/agent-chat.pipeline.js";
 import type {
   AgentConversationCreateInput,
   AgentConversationListFilters,
   AgentMessageCreateInput,
   AgentMessageListFilters,
-} from "../types/agent-chat.types.js";
+} from "../../types/agent-chat.types.js";
 
 const router = Router();
 

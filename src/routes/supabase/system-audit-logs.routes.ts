@@ -1,12 +1,12 @@
 import { Router } from "express";
 
-import { requireSuperAdminOrSetup } from "../middleware/super-admin-or-setup.middleware.js";
-import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
+import { requireSuperAdminOrSetup } from "../../middleware/super-admin-or-setup.middleware.js";
+import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
 import {
   getSystemAuditLogById,
   listSystemAuditLogs,
-} from "../services/system-audit-logs.service.js";
-import type { SystemAuditLogListFilters } from "../types/system-audit-log.types.js";
+} from "../../services/system-audit-logs.service.js";
+import type { SystemAuditLogListFilters } from "../../types/system-audit-log.types.js";
 
 const router = Router();
 
