@@ -7,6 +7,7 @@ import authRoutes from "./auth.routes.js";
 import didMappingsRoutes from "./did-mappings.routes.js";
 import systemAuditLogsRoutes from "./system-audit-logs.routes.js";
 import callsRoutes from "./calls.routes.js";
+import agentChatRoutes from "./agent-chat.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -108,6 +109,17 @@ router.get("/", (_req, res) => {
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
+      "GET /api/agent-chat/conversations":
+        "List conversations — agent: own + unread_count; super admin: all; ?participantAgentId=, limit, offset",
+      "POST /api/agent-chat/conversations":
+        "Get or create chat — body { peerAgentId, selfAgentId? }; super admin or agent (selfAgentId if no agents.user_id link)",
+      "GET /api/agent-chat/conversations/:id": "Get one conversation — super admin: any; agent: own only",
+      "GET /api/agent-chat/conversations/:id/messages":
+        "List messages — super admin: any conversation; agent: own only; ?limit=&offset=&after=",
+      "POST /api/agent-chat/conversations/:id/messages":
+        "Send message — body { content, selfAgentId? }; must be a conversation participant",
+      "POST /api/agent-chat/conversations/:id/read":
+        "Mark peer messages read — body optional { selfAgentId }; returns { marked }",
     },
   });
 });
@@ -129,6 +141,9 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
+
+/** Internal agent chat — Supabase `agent_conversations` + `agent_messages`. */
+router.use("/agent-chat", agentChatRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
