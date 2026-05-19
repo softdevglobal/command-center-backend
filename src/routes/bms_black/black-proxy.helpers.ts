@@ -64,6 +64,12 @@ export function resolveFirebaseBlackProxyContext(
   return { firebaseIdToken };
 }
 
+/** Optional owner scope — forwards `X-Tenant-Id` to Black only when the client sends it. */
+export function optionalTenantId(req: Request): string | undefined {
+  const tid = singleHeader(req.headers["x-tenant-id"]);
+  return tid || undefined;
+}
+
 export function resolveBlackTenantProxyContext(
   req: Request,
   res: Response
