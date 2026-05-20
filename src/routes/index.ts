@@ -44,7 +44,7 @@ router.get("/", (_req, res) => {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
       "POST /api/auth/login":
-        "Sign in — Supabase session; optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
+        "Sign in — Supabase session; optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
@@ -92,8 +92,12 @@ router.get("/", (_req, res) => {
         "List workshop owners for agent chat — Supabase Bearer + stored Firebase token; optional X-Tenant-Id.",
       "POST /api/bms-black/chats/start-with-owner":
         "Start chat with workshop owner — body { workshopOwnerUid, text? }; optional X-Tenant-Id.",
+      "GET /api/bms-black/chats/:chatId/messages":
+        "List messages in call-center chat thread — optional query limit, before.",
       "POST /api/bms-black/chats/:chatId/messages":
         "Send message in call-center chat thread — body { text }.",
+      "POST /api/bms-black/chats/:chatId/close":
+        "Close call-center chat (cc_... ids) — optional body { farewellMessage }.",
       "GET /api/bms-black/services":
         "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
       "GET /api/bms-black/services-by-branch":

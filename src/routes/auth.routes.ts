@@ -20,7 +20,7 @@ const router = Router();
  * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink (`firebasePinkIdentityToolkit`).
  * After each successful login the **server terminal** prints a bordered
  * `[BMS LOGIN]` summary (Supabase + Firebase SUCCESS / FAILED / SKIPPED).
- * The JSON body may include `firebaseIdentityToolkit` and `firebasePinkIdentityToolkit`.
+ * The JSON body may include `firebaseBlackIdentityToolkit` and `firebasePinkIdentityToolkit`.
  */
 router.post("/login", async (req, res) => {
   const body = req.body as { email?: string; password?: string };

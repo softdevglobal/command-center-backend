@@ -8,23 +8,22 @@ import {
 import { signInFirebaseBlackWithPassword } from "./firebase-black-login.service.js";
 import { rememberFirebaseBlackIdentityForUser } from "./firebase-black-login.store.js";
 import { signInFirebasePinkWithPassword } from "./firebase-pink-login.service.js";
+import { rememberFirebasePinkIdentityForUser } from "./firebase-pink-login.store.js";
 
 export type LoginInput = {
   email: string;
   password: string;
 };
 
-/** Response fragment from Identity Toolkit `accounts:signInWithPassword` (Black or Pink). */
+/** Login JSON status for Black/Pink Identity Toolkit (idTokens stored server-side, not in response). */
 export type FirebaseIdentityToolkitLogin =
   | {
       ok: true;
-      kind?: string | undefined;
+      /** Firebase idToken saved in memory — `firebase-black-login.store` or `firebase-pink-login.store`. */
+      stored: true;
       localId?: string | undefined;
       email?: string | undefined;
       displayName?: string | undefined;
-      idToken: string;
-      refreshToken?: string | undefined;
-      expiresIn?: string | undefined;
       registered?: boolean | undefined;
     }
   | { ok: false; error: string };
@@ -43,11 +42,13 @@ export type LoginSuccess = {
   roles: string[];
   agentType: string;
   /**
-   * Always included in JSON; `ok: true` only when Black Web API key is set and sign-in succeeds.
+   * Black Firebase sign-in status. On success, idToken is stored server-side only
+   * (`firebase-black-login.store.ts`) — not returned in this JSON.
    */
-  firebaseIdentityToolkit?: FirebaseIdentityToolkitLogin;
+  firebaseBlackIdentityToolkit?: FirebaseIdentityToolkitLogin;
   /**
-   * Always included in JSON; `ok: true` only when Pink Web API key is set and sign-in succeeds.
+   * Pink Firebase sign-in status. On success, idToken is stored server-side only
+   * (`firebase-pink-login.store.ts`) — not returned in this JSON.
    */
   firebasePinkIdentityToolkit?: FirebaseIdentityToolkitLogin;
 };
@@ -173,28 +174,38 @@ export async function loginWithSupabasePassword(
           idToken,
           email: d.email ?? input.email.trim(),
         });
-        body.firebaseIdentityToolkit = {
+        // Firebase Black idToken stored server-side (firebase-black-login.store.ts).
+        // idToken / refreshToken are not returned in login JSON — see commented block below.
+        // body.firebaseBlackIdentityToolkit = {
+        //   ok: true,
+        //   kind: d.kind,
+        //   localId: d.localId,
+        //   email: d.email,
+        //   displayName: d.displayName,
+        //   idToken,
+        //   refreshToken: d.refreshToken,
+        //   expiresIn: d.expiresIn,
+        //   registered: d.registered,
+        // };
+        body.firebaseBlackIdentityToolkit = {
           ok: true,
-          kind: d.kind,
+          stored: true,
           localId: d.localId,
           email: d.email,
           displayName: d.displayName,
-          idToken,
-          refreshToken: d.refreshToken,
-          expiresIn: d.expiresIn,
           registered: d.registered,
         };
       } else {
-        body.firebaseIdentityToolkit = {
+        body.firebaseBlackIdentityToolkit = {
           ok: false,
           error: "Missing idToken in Identity Toolkit response.",
         };
       }
     } else {
-      body.firebaseIdentityToolkit = { ok: false, error: fbPass.message };
+      body.firebaseBlackIdentityToolkit = { ok: false, error: fbPass.message };
     }
   } else {
-    body.firebaseIdentityToolkit = {
+    body.firebaseBlackIdentityToolkit = {
       ok: false,
       error:
         "SKIPPED — set FIREBASE_BLACK_WEB_API_KEY on the Command Center server (.env), then restart. Use the Web API key from Firebase Console → Project settings (Black/bmspro-black project).",
@@ -214,15 +225,30 @@ export async function loginWithSupabasePassword(
       const idTokenPink = pinkPass.data.idToken;
       if (idTokenPink) {
         const pd = pinkPass.data;
+        rememberFirebasePinkIdentityForUser({
+          supabaseUserId: data.user.id,
+          idToken: idTokenPink,
+          email: pd.email ?? input.email.trim(),
+        });
+        // Firebase Pink idToken stored server-side (firebase-pink-login.store.ts).
+        // idToken / refreshToken are not returned in login JSON — see commented block below.
+        // body.firebasePinkIdentityToolkit = {
+        //   ok: true,
+        //   kind: pd.kind,
+        //   localId: pd.localId,
+        //   email: pd.email,
+        //   displayName: pd.displayName,
+        //   idToken: idTokenPink,
+        //   refreshToken: pd.refreshToken,
+        //   expiresIn: pd.expiresIn,
+        //   registered: pd.registered,
+        // };
         body.firebasePinkIdentityToolkit = {
           ok: true,
-          kind: pd.kind,
+          stored: true,
           localId: pd.localId,
           email: pd.email,
           displayName: pd.displayName,
-          idToken: idTokenPink,
-          refreshToken: pd.refreshToken,
-          expiresIn: pd.expiresIn,
           registered: pd.registered,
         };
       } else {
@@ -258,16 +284,16 @@ export async function loginWithSupabasePassword(
       "    SKIPPED — FIREBASE_BLACK_WEB_API_KEY is empty.",
       "    -> Add the Web API key to .env and restart the server to auto-call Identity Toolkit."
     );
-  } else if (body.firebaseIdentityToolkit?.ok === true) {
-    const d = body.firebaseIdentityToolkit;
+  } else if (body.firebaseBlackIdentityToolkit?.ok === true) {
+    const d = body.firebaseBlackIdentityToolkit;
     bannerLines.push(
       "    SUCCESS — same email/password accepted by Firebase.",
-      `    localId: ${d.localId ?? "n/a"}   registered: ${String(d.registered)}   idToken: issued (see JSON firebaseIdentityToolkit)`
+      `    localId: ${d.localId ?? "n/a"}   registered: ${String(d.registered)}   idToken: stored server-side (firebase-black-login.store)`
     );
-  } else if (body.firebaseIdentityToolkit && body.firebaseIdentityToolkit.ok === false) {
+  } else if (body.firebaseBlackIdentityToolkit && body.firebaseBlackIdentityToolkit.ok === false) {
     bannerLines.push(
       "    FAILED — Firebase did not return a usable session for this password.",
-      `    -> ${body.firebaseIdentityToolkit.error}`
+      `    -> ${body.firebaseBlackIdentityToolkit.error}`
     );
   } else {
     bannerLines.push("    (unexpected — no toolkit result)");
@@ -285,7 +311,7 @@ export async function loginWithSupabasePassword(
     const p = body.firebasePinkIdentityToolkit;
     bannerLines.push(
       "    SUCCESS — same email/password accepted by Firebase Pink.",
-      `    localId: ${p.localId ?? "n/a"}   registered: ${String(p.registered)}   idToken: issued (see JSON firebasePinkIdentityToolkit)`
+      `    localId: ${p.localId ?? "n/a"}   registered: ${String(p.registered)}   idToken: stored server-side (firebase-pink-login.store)`
     );
   } else if (
     body.firebasePinkIdentityToolkit &&
