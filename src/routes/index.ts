@@ -10,6 +10,7 @@ import callsRoutes from "./supabase/calls.routes.js";
 import agentChatRoutes from "./supabase/agent-chat.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
+import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -150,6 +151,14 @@ router.get("/", (_req, res) => {
         "Get one leave request — agent: own only; super admin: any",
       "PATCH /api/agent-leave-requests/:id/review":
         "Approve/reject leave request — super admin only; body { status: approved|rejected, reviewComment? }",
+      "GET /api/agent-shift-schedules":
+        "List shift schedules — agent: own only; super admin: all plus ?agentId= or ?userId=, limit, offset",
+      "GET /api/agent-shift-schedules/me":
+        "Current agent's assigned shift schedule",
+      "GET /api/agent-shift-schedules/:agentId":
+        "Get one shift schedule by agents.id — agent: own only; super admin: any",
+      "PUT /api/agent-shift-schedules/:agentId":
+        "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
     },
   });
 });
@@ -180,6 +189,9 @@ router.use("/agent-attendance", agentAttendanceRoutes);
 
 /** Agent leave applications and approvals — Supabase `agent_leave_requests`. */
 router.use("/agent-leave-requests", agentLeaveRequestsRoutes);
+
+/** Agent weekly shift schedules — Supabase `agent_shift_schedules`. */
+router.use("/agent-shift-schedules", agentShiftSchedulesRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
