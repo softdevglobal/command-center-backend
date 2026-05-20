@@ -4,9 +4,11 @@ import { getFirebaseBlackApp } from "../db/firebase/firebase.black.js";
 import { getFirebasePinkApp } from "../db/firebase/firebase.pink.js";
 import agentsRoutes from "./agents.routes.js";
 import authRoutes from "./auth.routes.js";
-import didMappingsRoutes from "./did-mappings.routes.js";
-import systemAuditLogsRoutes from "./system-audit-logs.routes.js";
-import callsRoutes from "./calls.routes.js";
+import didMappingsRoutes from "./supabase/did-mappings.routes.js";
+import systemAuditLogsRoutes from "./supabase/system-audit-logs.routes.js";
+import callsRoutes from "./supabase/calls.routes.js";
+import agentChatRoutes from "./supabase/agent-chat.routes.js";
+import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -119,6 +121,26 @@ router.get("/", (_req, res) => {
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
+      "GET /api/agent-chat/conversations":
+        "List conversations — agent: own + unread_count; super admin: all; ?participantAgentId=, limit, offset",
+      "POST /api/agent-chat/conversations":
+        "Get or create chat — body { peerAgentId, selfAgentId? }; super admin or agent (selfAgentId if no agents.user_id link)",
+      "GET /api/agent-chat/conversations/:id": "Get one conversation — super admin: any; agent: own only",
+      "GET /api/agent-chat/conversations/:id/messages":
+        "List messages — super admin: any conversation; agent: own only; ?limit=&offset=&after=",
+      "POST /api/agent-chat/conversations/:id/messages":
+        "Send message — body { content, selfAgentId? }; must be a conversation participant",
+      "POST /api/agent-chat/conversations/:id/read":
+        "Mark peer messages read — body optional { selfAgentId }; returns { marked }",
+      "GET /api/agent-attendance/status":
+        "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
+      "GET /api/agent-attendance/reports":
+        "Attendance summary — ?groupBy=day|week|month&from=YYYY-MM-DD&to=YYYY-MM-DD; super admin: all agents (+ optional agentId); agent: own only. Returns total_days, total_working_hours, avg_hours_per_day per period",
+      "GET /api/agent-attendance/events":
+        "List attendance events — agent: own only; super admin: ?agentId= or ?userId= plus tenantId, eventType, from, to, limit, offset",
+      "POST /api/agent-attendance/events":
+        "Record clock_in|break_start|break_end|clock_out — body { eventType, agentId?|userId?, tenantId?, occurredAt?, agentDisplayName? }; validates state transitions (409 on invalid)",
+      "GET /api/agent-attendance/events/:id": "Get one attendance event — agent: own only",
     },
   });
 });
@@ -140,6 +162,12 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
+
+/** Internal agent chat — Supabase `agent_conversations` + `agent_messages`. */
+router.use("/agent-chat", agentChatRoutes);
+
+/** Agent clock-in/out and breaks — Supabase `agent_attendance_events`. */
+router.use("/agent-attendance", agentAttendanceRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);

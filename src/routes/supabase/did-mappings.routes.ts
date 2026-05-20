@@ -1,23 +1,23 @@
 import { createClient, type User } from "@supabase/supabase-js";
 import { Router, type Request, type Response } from "express";
 
-import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
+import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
-} from "../db/supabase/supabase.client.js";
-import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
+} from "../../db/supabase/supabase.client.js";
+import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
 import {
   createDidMapping,
   deleteDidMapping,
   getDidMappingByDid,
   listDidMappings,
   updateDidMapping,
-} from "../services/did-mappings.service.js";
+} from "../../services/did-mappings.service.js";
 import type {
   DIDMappingInput,
   DIDMappingUpdateInput,
-} from "../types/did-mapping.types.js";
+} from "../../types/did-mapping.types.js";
 
 const router = Router();
 
