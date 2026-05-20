@@ -9,6 +9,7 @@ import systemAuditLogsRoutes from "./supabase/system-audit-logs.routes.js";
 import callsRoutes from "./supabase/calls.routes.js";
 import agentChatRoutes from "./supabase/agent-chat.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
+import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -141,6 +142,14 @@ router.get("/", (_req, res) => {
       "POST /api/agent-attendance/events":
         "Record clock_in|break_start|break_end|clock_out — body { eventType, agentId?|userId?, tenantId?, occurredAt?, agentDisplayName? }; validates state transitions (409 on invalid)",
       "GET /api/agent-attendance/events/:id": "Get one attendance event — agent: own only",
+      "GET /api/agent-leave-requests":
+        "List leave requests — agent: own only; super admin: all plus ?agentId= or ?userId=, status, tenantId, from, to, limit, offset",
+      "POST /api/agent-leave-requests":
+        "Apply for leave — body { startDate, endDate, durationType=full_day|half_day, halfDayPart?, reason?, attachmentStoragePath? }",
+      "GET /api/agent-leave-requests/:id":
+        "Get one leave request — agent: own only; super admin: any",
+      "PATCH /api/agent-leave-requests/:id/review":
+        "Approve/reject leave request — super admin only; body { status: approved|rejected, reviewComment? }",
     },
   });
 });
@@ -168,6 +177,9 @@ router.use("/agent-chat", agentChatRoutes);
 
 /** Agent clock-in/out and breaks — Supabase `agent_attendance_events`. */
 router.use("/agent-attendance", agentAttendanceRoutes);
+
+/** Agent leave applications and approvals — Supabase `agent_leave_requests`. */
+router.use("/agent-leave-requests", agentLeaveRequestsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
