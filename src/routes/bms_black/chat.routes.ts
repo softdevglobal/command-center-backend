@@ -10,7 +10,9 @@ import {
   proxyBlackSupportChatSendMessage,
 } from "../../services/bms_black/black-support-chat.proxy.service.js";
 import {
-  proxyBlackCallCenterChatSendMessage,
+  proxyBlackCallCenterChatClose,
+  proxyBlackCallCenterChatMessages,
+  proxyBlackCallCenterChatPostMessage,
   proxyBlackCallCenterChatStartWithOwner,
   proxyBlackCallCenterChatWorkshopOwners,
 } from "../../services/bms_black/black-call-center-chats.proxy.service.js";
@@ -250,6 +252,37 @@ router.post("/chats/start-with-owner", attachSupabaseUser, async (req, res) => {
 });
 
 /**
+ * GET /api/bms-black/chats/:chatId/messages?limit=&before=
+ * Upstream: GET https://black.bmspros.com.au/api/call-center/chats/:chatId/messages
+ * Headers: Authorization; optional X-Tenant-Id.
+ */
+router.get("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const chatId = chatIdParam(req.params.chatId);
+  if (!chatId) {
+    res.status(400).json({ error: "Missing chat id." });
+    return;
+  }
+
+  const query: { limit?: string; before?: string } = {};
+  const limit = singleQuery(req.query.limit);
+  const before = singleQuery(req.query.before);
+  if (limit) query.limit = limit;
+  if (before) query.before = before;
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatMessages(
+      ctx.firebaseIdToken,
+      chatId,
+      query,
+      optionalTenantId(req)
+    )
+  );
+});
+
+/**
  * POST /api/bms-black/chats/:chatId/messages
  * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/:chatId/messages
  * Body: `{ "text": "Thank you for contacting us." }`
@@ -266,7 +299,36 @@ router.post("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
   }
 
   await runBlackProxy(res, () =>
-    proxyBlackCallCenterChatSendMessage(
+    proxyBlackCallCenterChatPostMessage(
+      ctx.firebaseIdToken,
+      chatId,
+      req.body,
+      optionalTenantId(req)
+    )
+  );
+});
+
+/**
+ * POST /api/bms-black/chats/:chatId/close
+ * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/:chatId/close
+ * Body (optional): `{ "farewellMessage": "Thanks for contacting us" }`
+ * Headers: Authorization; optional X-Tenant-Id.
+ *
+ * Use for **call-center** chat ids (`cc_...`). Do not use `/agent/conversations/.../close`
+ * — that is support-chat only (different conversation ids).
+ */
+router.post("/chats/:chatId/close", attachSupabaseUser, async (req, res) => {
+  const ctx = resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const chatId = chatIdParam(req.params.chatId);
+  if (!chatId) {
+    res.status(400).json({ error: "Missing chat id." });
+    return;
+  }
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatClose(
       ctx.firebaseIdToken,
       chatId,
       req.body,

@@ -43,11 +43,51 @@ export async function proxyBlackCallCenterChatStartWithOwner(
 }
 
 /**
+ * GET /api/bms-black/chats/:chatId/messages?limit=&before=
+ * Upstream: GET https://black.bmspros.com.au/api/call-center/chats/:chatId/messages
+ */
+export async function proxyBlackCallCenterChatMessages(
+  firebaseIdToken: string,
+  chatId: string,
+  query: { limit?: string; before?: string },
+  headerTenantId?: string
+): Promise<Response> {
+  const params = new URLSearchParams();
+  if (query.limit?.trim()) params.set("limit", query.limit.trim());
+  if (query.before?.trim()) params.set("before", query.before.trim());
+  const qs = params.toString();
+  const base = `${CALL_CENTER_CHATS}/${encodeURIComponent(chatId.trim())}/messages`;
+  const path = qs ? `${base}?${qs}` : base;
+  const init: RequestInit & { tenantId?: string } = { method: "GET" };
+  if (headerTenantId) init.tenantId = headerTenantId;
+  return blackCallCenterFetch(path, firebaseIdToken, init);
+}
+
+/**
+ * POST /api/bms-black/chats/:chatId/close
+ * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/:chatId/close
+ * Body (optional): `{ "farewellMessage": "..." }`
+ */
+export async function proxyBlackCallCenterChatClose(
+  firebaseIdToken: string,
+  chatId: string,
+  body: unknown,
+  headerTenantId?: string
+): Promise<Response> {
+  const path = `${CALL_CENTER_CHATS}/${encodeURIComponent(chatId.trim())}/close`;
+  const init: RequestInit & { tenantId?: string } = {
+    ...jsonWriteInit("POST", body ?? {}),
+  };
+  if (headerTenantId) init.tenantId = headerTenantId;
+  return blackCallCenterFetch(path, firebaseIdToken, init);
+}
+
+/**
  * POST /api/bms-black/chats/:chatId/messages
  * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/:chatId/messages
  * Body: `{ "text": "Thank you for contacting us." }`
  */
-export async function proxyBlackCallCenterChatSendMessage(
+export async function proxyBlackCallCenterChatPostMessage(
   firebaseIdToken: string,
   chatId: string,
   body: unknown,
