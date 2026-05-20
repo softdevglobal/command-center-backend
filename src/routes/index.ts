@@ -50,6 +50,16 @@ router.get("/", (_req, res) => {
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
+      "GET /api/agents":
+        "List command center and workshop agents — super-admin Bearer OR x-setup-secret; filters: agentType=all|command-centre|command-center|workshop, tenantId, ownerUid, branchId, role, status, search, limit, offset",
+      "GET /api/agents/performance":
+        "Agent performance from agents + calls — super-admin Bearer OR x-setup-secret; filters: agentId, agentType, tenantId, ownerUid, branchId, queueId, role, status, search, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, limit, offset",
+      "GET /api/agents/:id":
+        "View one command center or workshop agent — super-admin Bearer OR x-setup-secret.",
+      "PATCH /api/agents/:id":
+        "Edit command center or workshop agent — super-admin Bearer OR x-setup-secret; body includes name, email, phone/phoneNumber, extension, notes, tenantId, queueIds, allowedQueueIds, role, status, agentType, workshopOwnerUid, workshopBranchId, workshopUserRole.",
+      "DELETE /api/agents/:id":
+        "Delete one command center or workshop agent — super-admin Bearer OR x-setup-secret; also best-effort removes linked user_roles and Supabase Auth user.",
       "GET /api/bms-black/getallbooking":
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
