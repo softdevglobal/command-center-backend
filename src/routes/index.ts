@@ -11,6 +11,7 @@ import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
+import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -85,6 +86,12 @@ router.get("/", (_req, res) => {
       "POST /api/bms-black/agent/conversations/:conversationId/read": "Mark conversation read.",
       "POST /api/bms-black/agent/conversations/:conversationId/close":
         "Close conversation — optional body { farewellMessage }.",
+      "GET /api/bms-black/chats/workshop-owners":
+        "List workshop owners for agent chat — Supabase Bearer + stored Firebase token; optional X-Tenant-Id.",
+      "POST /api/bms-black/chats/start-with-owner":
+        "Start chat with workshop owner — body { workshopOwnerUid, text? }; optional X-Tenant-Id.",
+      "POST /api/bms-black/chats/:chatId/messages":
+        "Send message in call-center chat thread — body { text }.",
       "GET /api/bms-black/services":
         "Proxy Black services — Supabase Bearer + X-Tenant-Id.",
       "GET /api/bms-black/services-by-branch":
@@ -92,6 +99,10 @@ router.get("/", (_req, res) => {
       "GET /api/bms-black/services/:id": "Get service by id.",
       "GET /api/bms-black/services/:serviceId/staff":
         "Staff for service — required query branchId, date.",
+      "GET /api/bms-black/branches":
+        "List branches for owner — Supabase Bearer + X-Tenant-Id; optional query ownerUid (defaults to header).",
+      "GET /api/bms-black/branches/:branchId":
+        "Get branch by id — Supabase Bearer + X-Tenant-Id.",
       "GET /api/health/db": "Supabase + Firebase connectivity",
       "GET /api/did-mappings":
         "List DID→queue mappings (super-admin Bearer OR x-setup-secret); optional ?tenantId=&queueId=",
@@ -135,6 +146,7 @@ router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
 router.use("/bms-black", bmsBlackCallCenterNotificationsRoutes);
 router.use("/bms-black", bmsBlackSupportChatRoutes);
 router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
+router.use("/bms-black", bmsBlackCallCenterBranchRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {
