@@ -9,6 +9,8 @@ import systemAuditLogsRoutes from "./supabase/system-audit-logs.routes.js";
 import callsRoutes from "./supabase/calls.routes.js";
 import agentChatRoutes from "./supabase/agent-chat.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
+import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
+import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -48,6 +50,16 @@ router.get("/", (_req, res) => {
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
+      "GET /api/agents":
+        "List command center and workshop agents — super-admin Bearer OR x-setup-secret; filters: agentType=all|command-centre|command-center|workshop, tenantId, ownerUid, branchId, role, status, search, limit, offset",
+      "GET /api/agents/performance":
+        "Agent performance from agents + calls — super-admin Bearer OR x-setup-secret; filters: agentId, agentType, tenantId, ownerUid, branchId, queueId, role, status, search, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, limit, offset",
+      "GET /api/agents/:id":
+        "View one command center or workshop agent — super-admin Bearer OR x-setup-secret.",
+      "PATCH /api/agents/:id":
+        "Edit command center or workshop agent — super-admin Bearer OR x-setup-secret; body includes name, email, phone/phoneNumber, extension, notes, tenantId, queueIds, allowedQueueIds, role, status, agentType, workshopOwnerUid, workshopBranchId, workshopUserRole.",
+      "DELETE /api/agents/:id":
+        "Delete one command center or workshop agent — super-admin Bearer OR x-setup-secret; also best-effort removes linked user_roles and Supabase Auth user.",
       "GET /api/bms-black/getallbooking":
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
@@ -141,6 +153,22 @@ router.get("/", (_req, res) => {
       "POST /api/agent-attendance/events":
         "Record clock_in|break_start|break_end|clock_out — body { eventType, agentId?|userId?, tenantId?, occurredAt?, agentDisplayName? }; validates state transitions (409 on invalid)",
       "GET /api/agent-attendance/events/:id": "Get one attendance event — agent: own only",
+      "GET /api/agent-leave-requests":
+        "List leave requests — agent: own only; super admin: all plus ?agentId= or ?userId=, status, tenantId, from, to, limit, offset",
+      "POST /api/agent-leave-requests":
+        "Apply for leave — body { startDate, endDate, durationType=full_day|half_day, halfDayPart?, reason?, attachmentStoragePath? }",
+      "GET /api/agent-leave-requests/:id":
+        "Get one leave request — agent: own only; super admin: any",
+      "PATCH /api/agent-leave-requests/:id/review":
+        "Approve/reject leave request — super admin only; body { status: approved|rejected, reviewComment? }",
+      "GET /api/agent-shift-schedules":
+        "List shift schedules — agent: own only; super admin: all plus ?agentId= or ?userId=, limit, offset",
+      "GET /api/agent-shift-schedules/me":
+        "Current agent's assigned shift schedule",
+      "GET /api/agent-shift-schedules/:agentId":
+        "Get one shift schedule by agents.id — agent: own only; super admin: any",
+      "PUT /api/agent-shift-schedules/:agentId":
+        "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
     },
   });
 });
@@ -168,6 +196,12 @@ router.use("/agent-chat", agentChatRoutes);
 
 /** Agent clock-in/out and breaks — Supabase `agent_attendance_events`. */
 router.use("/agent-attendance", agentAttendanceRoutes);
+
+/** Agent leave applications and approvals — Supabase `agent_leave_requests`. */
+router.use("/agent-leave-requests", agentLeaveRequestsRoutes);
+
+/** Agent weekly shift schedules — Supabase `agent_shift_schedules`. */
+router.use("/agent-shift-schedules", agentShiftSchedulesRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
