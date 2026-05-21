@@ -57,3 +57,48 @@ export type CallListPublicResult = {
   limit: number;
   offset: number;
 };
+
+export type CallMetricsFilters = {
+  tenantId?: string;
+  queueId?: string;
+  agentId?: string;
+  direction?: CallDirection;
+  /** Inclusive start of `calls.start_time` range (ISO 8601). */
+  from: string;
+  /** Inclusive end of `calls.start_time` range (ISO 8601). */
+  to: string;
+  /** SLA target in seconds from call start to answer. */
+  slaSeconds: number;
+};
+
+export type OnlineAgentsCountFilters = {
+  tenantId?: string;
+  queueId?: string;
+  ownerUid?: string;
+  branchId?: string;
+  role?: string;
+  agentType?: "all" | "command-centre" | "workshop";
+  onlineStatuses: string[];
+};
+
+export type DashboardMetricsFilters = CallMetricsFilters &
+  OnlineAgentsCountFilters;
+
+export type DashboardCallMetrics = {
+  today_calls_count: number;
+  answered_calls_count: number;
+  abandoned_calls_count: number;
+  answer_rate_percent: number;
+  abandon_rate_percent: number;
+  average_handle_seconds: number;
+  sla_percent: number;
+  sla_answered_within_threshold_count: number;
+  sla_threshold_seconds: number;
+};
+
+export type DashboardMetricsResult = DashboardCallMetrics & {
+  online_agents_count: number;
+  from: string;
+  to: string;
+  online_statuses: string[];
+};

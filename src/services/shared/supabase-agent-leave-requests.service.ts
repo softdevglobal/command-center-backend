@@ -151,6 +151,30 @@ export async function createAgentLeaveRequestInSupabase(input: {
   return data as AgentLeaveRequestRow;
 }
 
+export async function deletePendingAgentLeaveRequestInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  id: string;
+  userId: string;
+}): Promise<AgentLeaveRequestRow | null> {
+  const key = input.id.trim();
+  const userId = input.userId.trim();
+  if (!key || !userId) return null;
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  const { data, error } = await supabase
+    .from("agent_leave_requests")
+    .delete()
+    .eq("id", key)
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .select("*")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as AgentLeaveRequestRow | null) ?? null;
+}
+
 export async function reviewAgentLeaveRequestInSupabase(input: {
   supabaseUrl: string;
   serviceRoleKey: string;

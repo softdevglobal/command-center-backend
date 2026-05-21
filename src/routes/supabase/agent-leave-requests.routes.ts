@@ -4,6 +4,7 @@ import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
 import {
   createAgentLeaveRequest,
+  deletePendingAgentLeaveRequest,
   getAgentLeaveRequestById,
   isDateOnly,
   listAgentLeaveRequests,
@@ -400,6 +401,70 @@ router.get("/:id", async (req, res) => {
   } catch (e) {
     const msg =
       e instanceof Error ? e.message : "Failed to load agent leave request";
+    res.status(500).json({ success: false, error: msg });
+  }
+});
+
+/**
+ * DELETE /api/agent-leave-requests/:id
+ * Agents may delete only their own pending requests before super admin review.
+ */
+router.delete("/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = resolveLeaveAccess(auth.roles, auth.user.id);
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+  if (access.kind !== "agent") {
+    res.status(403).json({
+      success: false,
+      error: "Only agents may delete their own pending leave requests.",
+    });
+    return;
+  }
+
+  const id = paramId(req.params.id);
+
+  try {
+    const existing = await getAgentLeaveRequestById(id);
+    if (!existing || !userMayViewLeaveRequest(existing, access.userId)) {
+      res.status(404).json({ success: false, error: "Leave request not found." });
+      return;
+    }
+    if (existing.status !== "pending") {
+      res.status(409).json({
+        success: false,
+        error:
+          "Only pending leave requests can be deleted. This request has already been reviewed.",
+      });
+      return;
+    }
+
+    const deleted = await deletePendingAgentLeaveRequest(id, access.userId);
+    if (!deleted) {
+      res.status(409).json({
+        success: false,
+        error:
+          "Leave request could not be deleted because it is no longer pending.",
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: deleted,
+      access: access.kind,
+      ...authExtras(res),
+    });
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "Failed to delete agent leave request";
     res.status(500).json({ success: false, error: msg });
   }
 });

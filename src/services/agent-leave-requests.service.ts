@@ -7,6 +7,7 @@ import type {
 } from "../types/agent-leave-request.types.js";
 import {
   createAgentLeaveRequestViaSupabase,
+  deletePendingAgentLeaveRequestViaSupabase,
   getAgentLeaveRequestByIdViaSupabase,
   listAgentLeaveRequestsViaSupabase,
   reviewAgentLeaveRequestViaSupabase,
@@ -66,6 +67,13 @@ export async function createAgentLeaveRequest(
   const validationError = validateAgentLeaveRequestCreateInput(input);
   if (validationError) throw new Error(validationError);
   return createAgentLeaveRequestViaSupabase({ row: input });
+}
+
+export async function deletePendingAgentLeaveRequest(
+  id: string,
+  userId: string
+): Promise<AgentLeaveRequestRow | null> {
+  return deletePendingAgentLeaveRequestViaSupabase({ id, userId });
 }
 
 export async function reviewAgentLeaveRequest(

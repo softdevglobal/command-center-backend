@@ -13,6 +13,7 @@ import {
 import { getAgentProfileByUserIdInSupabase } from "./supabase-agents.service.js";
 import {
   createAgentLeaveRequestInSupabase,
+  deletePendingAgentLeaveRequestInSupabase,
   getAgentLeaveRequestByIdInSupabase,
   listAgentLeaveRequestsInSupabase,
   reviewAgentLeaveRequestInSupabase,
@@ -110,6 +111,19 @@ export async function createAgentLeaveRequestViaSupabase(input: {
     supabaseUrl,
     serviceRoleKey,
     row,
+  });
+}
+
+export async function deletePendingAgentLeaveRequestViaSupabase(input: {
+  id: string;
+  userId: string;
+}): Promise<AgentLeaveRequestRow | null> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForAgentLeaveRequests();
+  return deletePendingAgentLeaveRequestInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    id: input.id,
+    userId: input.userId,
   });
 }
 

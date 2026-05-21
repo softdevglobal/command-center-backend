@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  CreateSystemAuditLogInput,
   SystemAuditLogListFilters,
   SystemAuditLogListResult,
   SystemAuditLogRow,
@@ -31,6 +32,53 @@ function normalizePagination(filters: SystemAuditLogListFilters): {
     Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0
   );
   return { limit, offset };
+}
+
+export async function createSystemAuditLogInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  body: CreateSystemAuditLogInput;
+}): Promise<SystemAuditLogRow> {
+  const body = input.body;
+  const userId = String(body.userId ?? "").trim();
+  const userName = String(body.userName ?? "").trim();
+  const userRole = String(body.userRole ?? "").trim();
+  const action = String(body.action ?? "").trim();
+  const resourceType = String(body.resourceType ?? "").trim();
+
+  if (!userId || !userName || !userRole || !action || !resourceType) {
+    throw new Error(
+      "userId, userName, userRole, action, and resourceType are required."
+    );
+  }
+
+  const details =
+    body.details && typeof body.details === "object" && !Array.isArray(body.details)
+      ? body.details
+      : {};
+
+  const row = {
+    user_id: userId,
+    user_name: userName,
+    user_role: userRole,
+    action,
+    resource_type: resourceType,
+    resource_id:
+      body.resourceId === undefined || body.resourceId === null
+        ? null
+        : String(body.resourceId),
+    details,
+  };
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  const { data, error } = await supabase
+    .from("system_audit_logs")
+    .insert(row)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as SystemAuditLogRow;
 }
 
 export async function listSystemAuditLogsInSupabase(input: {
