@@ -28,3 +28,20 @@ export type SystemAuditLogListResult = {
   limit: number;
   offset: number;
 };
+
+export type CreateSystemAuditLogInput = {
+  userId: string;
+  userName: string;
+  userRole: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string | null;
+  details?: Record<string, unknown> | null;
+};
+
+export type CreateSystemAuditLogRequestBody = {
+  action?: string;
+  resourceType?: string;
+  resourceId?: string | null;
+  details?: Record<string, unknown> | null;
+};

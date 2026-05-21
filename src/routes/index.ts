@@ -7,6 +7,7 @@ import authRoutes from "./auth.routes.js";
 import didMappingsRoutes from "./supabase/did-mappings.routes.js";
 import systemAuditLogsRoutes from "./supabase/system-audit-logs.routes.js";
 import callsRoutes from "./supabase/calls.routes.js";
+import dashboardMetricsRoutes from "./supabase/dashboard-metrics.routes.js";
 import agentChatRoutes from "./supabase/agent-chat.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
@@ -131,12 +132,28 @@ router.get("/", (_req, res) => {
         "Partial update — did fixed in URL; send any of label, tenantId, queueId, ownerUid, workshopName, branchId, branchName",
       "DELETE /api/did-mappings/:did":
         "Delete DID mapping by primary key — same auth as GET (URL-encode + if needed)",
+      "POST /api/system-audit-logs":
+        "Create audit log — Bearer any logged-in user; body { action, resourceType, resourceId?, details? }",
       "GET /api/system-audit-logs":
         "List audit logs (super-admin Bearer OR x-setup-secret); ?userId=&action=&resourceType=&resourceId=&from=&to=&limit=&offset=",
       "GET /api/system-audit-logs/:id": "Get one audit log by UUID",
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
+      "GET /api/dashboard/metrics":
+        "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus, slaSeconds",
+      "GET /api/dashboard/online-agents-count":
+        "Online agents count — same auth/filtering as dashboard metrics; defaults onlineStatus=online.",
+      "GET /api/dashboard/today-calls-count":
+        "Today's calls count — same auth/filtering as dashboard metrics.",
+      "GET /api/dashboard/answer-rate":
+        "Answer rate percentage — same auth/filtering as dashboard metrics.",
+      "GET /api/dashboard/abandon-rate":
+        "Abandon rate percentage — same auth/filtering as dashboard metrics.",
+      "GET /api/dashboard/avg-handle":
+        "Average handle time in seconds — same auth/filtering as dashboard metrics.",
+      "GET /api/dashboard/sla":
+        "SLA percentage — answered calls within slaSeconds (default 20) divided by answered calls.",
       "GET /api/agent-chat/conversations":
         "List conversations — agent: own + unread_count; super admin: all; ?participantAgentId=, limit, offset",
       "POST /api/agent-chat/conversations":
@@ -163,6 +180,8 @@ router.get("/", (_req, res) => {
         "Apply for leave — body { startDate, endDate, durationType=full_day|half_day, halfDayPart?, reason?, attachmentStoragePath? }",
       "GET /api/agent-leave-requests/:id":
         "Get one leave request — agent: own only; super admin: any",
+      "DELETE /api/agent-leave-requests/:id":
+        "Delete own pending leave request — agent only; approved/rejected requests cannot be deleted",
       "PATCH /api/agent-leave-requests/:id/review":
         "Approve/reject leave request — super admin only; body { status: approved|rejected, reviewComment? }",
       "GET /api/agent-shift-schedules":
@@ -194,6 +213,9 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
+
+/** Dashboard call-center KPIs — Supabase `agents` + `calls`. */
+router.use("/dashboard", dashboardMetricsRoutes);
 
 /** Internal agent chat — Supabase `agent_conversations` + `agent_messages`. */
 router.use("/agent-chat", agentChatRoutes);

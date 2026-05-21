@@ -1,4 +1,5 @@
 import type {
+  CreateSystemAuditLogInput,
   SystemAuditLogListFilters,
   SystemAuditLogListResult,
   SystemAuditLogRow,
@@ -9,6 +10,7 @@ import {
   getSupabaseServiceRoleKey,
 } from "../../db/supabase/supabase.client.js";
 import {
+  createSystemAuditLogInSupabase,
   getSystemAuditLogByIdInSupabase,
   listSystemAuditLogsInSupabase,
 } from "./supabase-system-audit-logs.service.js";
@@ -33,6 +35,17 @@ function assertSupabaseForAuditLogs(): {
 }
 
 /** Supabase only — `public.system_audit_logs`. */
+export async function createSystemAuditLogViaSupabase(input: {
+  body: CreateSystemAuditLogInput;
+}): Promise<SystemAuditLogRow> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForAuditLogs();
+  return createSystemAuditLogInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    body: input.body,
+  });
+}
+
 export async function listSystemAuditLogsViaSupabase(input: {
   filters: SystemAuditLogListFilters;
 }): Promise<SystemAuditLogListResult> {
