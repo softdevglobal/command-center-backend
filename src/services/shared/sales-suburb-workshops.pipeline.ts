@@ -5,15 +5,18 @@ import {
 } from "../../db/supabase/supabase.client.js";
 import type {
   SalesSuburbWorkshopInput,
+  SalesSuburbWorkshopAssignedListInput,
   SalesSuburbWorkshopListFilters,
   SalesSuburbWorkshopListResult,
   SalesSuburbWorkshopRow,
   SalesSuburbWorkshopUpdateInput,
 } from "../../types/sales-suburb-workshop.types.js";
 import {
+  agentMayViewSalesSuburbWorkshopInSupabase,
   createSalesSuburbWorkshopInSupabase,
   deleteSalesSuburbWorkshopInSupabase,
   getSalesSuburbWorkshopByIdInSupabase,
+  listAssignedSalesSuburbWorkshopsInSupabase,
   listSalesSuburbWorkshopsInSupabase,
   updateSalesSuburbWorkshopInSupabase,
 } from "./supabase-sales-suburb-workshops.service.js";
@@ -49,6 +52,17 @@ export async function listSalesSuburbWorkshopsViaSupabase(input: {
   });
 }
 
+export async function listAssignedSalesSuburbWorkshopsViaSupabase(
+  assignment: SalesSuburbWorkshopAssignedListInput
+): Promise<SalesSuburbWorkshopListResult> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForSalesSuburbWorkshops();
+  return listAssignedSalesSuburbWorkshopsInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    assignment,
+  });
+}
+
 export async function getSalesSuburbWorkshopByIdViaSupabase(input: {
   id: string;
 }): Promise<SalesSuburbWorkshopRow | null> {
@@ -57,6 +71,19 @@ export async function getSalesSuburbWorkshopByIdViaSupabase(input: {
     supabaseUrl,
     serviceRoleKey,
     id: input.id,
+  });
+}
+
+export async function agentMayViewSalesSuburbWorkshopViaSupabase(input: {
+  agentId: string;
+  row: SalesSuburbWorkshopRow;
+}): Promise<boolean> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForSalesSuburbWorkshops();
+  return agentMayViewSalesSuburbWorkshopInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    agentId: input.agentId,
+    row: input.row,
   });
 }
 

@@ -5,6 +5,7 @@ import {
   toSalesSuburbWorkshopInsertRow,
   toSalesSuburbWorkshopUpdatePatch,
   type SalesSuburbWorkshopInput,
+  type SalesSuburbWorkshopAssignedListInput,
   type SalesSuburbWorkshopListFilters,
   type SalesSuburbWorkshopListResult,
   type SalesSuburbWorkshopRow,
@@ -40,6 +41,28 @@ function normalizePagination(filters: SalesSuburbWorkshopListFilters): {
 
 function searchTerm(value: string): string {
   return value.trim().replace(/[,()]/g, " ");
+}
+
+function normalizedSuburb(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function applyWorkshopSearch<T extends { or: (filters: string) => T }>(
+  query: T,
+  search: string
+): T {
+  if (!search) return query;
+  return query.or(
+    [
+      `suburb.ilike.*${search}*`,
+      `workshop_name.ilike.*${search}*`,
+      `phone_number.ilike.*${search}*`,
+      `owner_name.ilike.*${search}*`,
+      `owner_email.ilike.*${search}*`,
+      `location.ilike.*${search}*`,
+      `website.ilike.*${search}*`,
+    ].join(",")
+  );
 }
 
 function throwSalesSuburbWorkshopDbError(error: {
@@ -88,20 +111,8 @@ export async function listSalesSuburbWorkshopsInSupabase(input: {
   const search = searchTerm(input.filters.search ?? "");
 
   if (tenantId) q = q.eq("tenant_id", tenantId);
-  if (suburb) q = q.eq("suburb_normalized", suburb.toLowerCase());
-  if (search) {
-    q = q.or(
-      [
-        `suburb.ilike.*${search}*`,
-        `workshop_name.ilike.*${search}*`,
-        `phone_number.ilike.*${search}*`,
-        `owner_name.ilike.*${search}*`,
-        `owner_email.ilike.*${search}*`,
-        `location.ilike.*${search}*`,
-        `website.ilike.*${search}*`,
-      ].join(",")
-    );
-  }
+  if (suburb) q = q.eq("suburb_normalized", normalizedSuburb(suburb));
+  q = applyWorkshopSearch(q, search);
 
   const { data, error, count } = await q.range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
@@ -112,6 +123,101 @@ export async function listSalesSuburbWorkshopsInSupabase(input: {
     limit,
     offset,
   };
+}
+
+export async function listAssignedSalesSuburbWorkshopsInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  assignment: SalesSuburbWorkshopAssignedListInput;
+}): Promise<SalesSuburbWorkshopListResult> {
+  const agentId = input.assignment.agentId.trim();
+  const { filters } = input.assignment;
+  const { limit, offset } = normalizePagination(filters);
+  if (!agentId) {
+    return { data: [], total: 0, limit, offset };
+  }
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  let assignmentQuery = supabase
+    .from("sales_agent_suburb_assignments")
+    .select("tenant_id, suburb")
+    .eq("agent_id", agentId);
+
+  const tenantId = filters.tenantId?.trim();
+  const suburb = filters.suburb?.trim();
+  const search = searchTerm(filters.search ?? "");
+
+  if (tenantId) assignmentQuery = assignmentQuery.eq("tenant_id", tenantId);
+  if (suburb) assignmentQuery = assignmentQuery.ilike("suburb", suburb);
+
+  const { data: assignmentRows, error: assignmentError } = await assignmentQuery;
+  if (assignmentError) throw new Error(assignmentError.message);
+
+  const scopes = new Map<string, { tenant_id: string; suburb_normalized: string }>();
+  for (const row of assignmentRows ?? []) {
+    const scope = row as { tenant_id?: string; suburb?: string };
+    const scopeTenantId = scope.tenant_id?.trim();
+    const scopeSuburb = normalizedSuburb(scope.suburb ?? "");
+    if (!scopeTenantId || !scopeSuburb) continue;
+    scopes.set(`${scopeTenantId}\u0000${scopeSuburb}`, {
+      tenant_id: scopeTenantId,
+      suburb_normalized: scopeSuburb,
+    });
+  }
+
+  const rowsById = new Map<string, SalesSuburbWorkshopRow>();
+  await Promise.all(
+    [...scopes.values()].map(async (scope) => {
+      let q = supabase
+        .from("sales_suburb_workshops")
+        .select("*")
+        .eq("tenant_id", scope.tenant_id)
+        .eq("suburb_normalized", scope.suburb_normalized);
+
+      q = applyWorkshopSearch(q, search);
+
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const row of (data ?? []) as SalesSuburbWorkshopRow[]) {
+        rowsById.set(row.id, row);
+      }
+    })
+  );
+
+  const sorted = [...rowsById.values()].sort((a, b) => {
+    const suburbCompare = a.suburb_normalized.localeCompare(b.suburb_normalized);
+    if (suburbCompare !== 0) return suburbCompare;
+    return a.workshop_name.localeCompare(b.workshop_name);
+  });
+
+  return {
+    data: sorted.slice(offset, offset + limit),
+    total: sorted.length,
+    limit,
+    offset,
+  };
+}
+
+export async function agentMayViewSalesSuburbWorkshopInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  agentId: string;
+  row: SalesSuburbWorkshopRow;
+}): Promise<boolean> {
+  const agentId = input.agentId.trim();
+  if (!agentId) return false;
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  const { data, error } = await supabase
+    .from("sales_agent_suburb_assignments")
+    .select("id")
+    .eq("agent_id", agentId)
+    .eq("tenant_id", input.row.tenant_id)
+    .ilike("suburb", input.row.suburb_normalized)
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
 }
 
 export async function getSalesSuburbWorkshopByIdInSupabase(input: {

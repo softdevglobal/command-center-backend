@@ -1,14 +1,17 @@
 import type {
   SalesSuburbWorkshopInput,
+  SalesSuburbWorkshopAssignedListInput,
   SalesSuburbWorkshopListFilters,
   SalesSuburbWorkshopListResult,
   SalesSuburbWorkshopRow,
   SalesSuburbWorkshopUpdateInput,
 } from "../types/sales-suburb-workshop.types.js";
 import {
+  agentMayViewSalesSuburbWorkshopViaSupabase,
   createSalesSuburbWorkshopViaSupabase,
   deleteSalesSuburbWorkshopViaSupabase,
   getSalesSuburbWorkshopByIdViaSupabase,
+  listAssignedSalesSuburbWorkshopsViaSupabase,
   listSalesSuburbWorkshopsViaSupabase,
   updateSalesSuburbWorkshopViaSupabase,
 } from "./shared/sales-suburb-workshops.pipeline.js";
@@ -19,10 +22,23 @@ export async function listSalesSuburbWorkshops(
   return listSalesSuburbWorkshopsViaSupabase({ filters });
 }
 
+export async function listAssignedSalesSuburbWorkshops(
+  assignment: SalesSuburbWorkshopAssignedListInput
+): Promise<SalesSuburbWorkshopListResult> {
+  return listAssignedSalesSuburbWorkshopsViaSupabase(assignment);
+}
+
 export async function getSalesSuburbWorkshopById(
   id: string
 ): Promise<SalesSuburbWorkshopRow | null> {
   return getSalesSuburbWorkshopByIdViaSupabase({ id });
+}
+
+export async function agentMayViewSalesSuburbWorkshop(input: {
+  agentId: string;
+  row: SalesSuburbWorkshopRow;
+}): Promise<boolean> {
+  return agentMayViewSalesSuburbWorkshopViaSupabase(input);
 }
 
 export async function createSalesSuburbWorkshop(

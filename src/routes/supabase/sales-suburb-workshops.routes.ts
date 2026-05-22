@@ -3,13 +3,16 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
 import {
+  agentMayViewSalesSuburbWorkshop,
   createSalesSuburbWorkshop,
   deleteSalesSuburbWorkshop,
   getSalesSuburbWorkshopById,
+  listAssignedSalesSuburbWorkshops,
   listSalesSuburbWorkshops,
   updateSalesSuburbWorkshop,
 } from "../../services/sales-suburb-workshops.service.js";
 import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
+import { resolveAgentIdForUserViaSupabase } from "../../services/shared/agent-chat.pipeline.js";
 import type {
   SalesSuburbWorkshopInput,
   SalesSuburbWorkshopListFilters,
@@ -19,7 +22,6 @@ import type {
 const router = Router();
 
 router.use(attachSupabaseUser);
-router.use(requireSalesSuburbWorkshopSuperAdmin);
 
 function queryString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
@@ -55,11 +57,52 @@ function requireSalesSuburbWorkshopSuperAdmin(
   next();
 }
 
-function authExtras(res: Response) {
+function isSuperAdmin(roles: string[]): boolean {
+  return roles.some((r) => roleMayRegisterAgents(r));
+}
+
+function isAgent(roles: string[]): boolean {
+  return roles.includes("agent");
+}
+
+type SalesSuburbWorkshopAccess =
+  | { kind: "super-admin"; agentId: string | null }
+  | { kind: "agent"; agentId: string };
+
+async function resolveSalesSuburbWorkshopAccess(
+  roles: string[],
+  userId: string
+): Promise<SalesSuburbWorkshopAccess | { error: string; status: number }> {
+  const linkedAgentId = await resolveAgentIdForUserViaSupabase({ userId });
+
+  if (isSuperAdmin(roles)) {
+    return { kind: "super-admin", agentId: linkedAgentId };
+  }
+
+  if (!isAgent(roles)) {
+    return {
+      status: 403,
+      error:
+        "Only super admins or agents may access sales suburb workshops. Sign in with an account that has the appropriate user_roles entry.",
+    };
+  }
+
+  if (!linkedAgentId) {
+    return {
+      status: 403,
+      error:
+        "No agent record linked to this user. Ensure agents.user_id matches your Supabase Auth user id.",
+    };
+  }
+
+  return { kind: "agent", agentId: linkedAgentId };
+}
+
+function authExtras(res: Response, access?: SalesSuburbWorkshopAccess) {
   const auth = res.locals.supabaseAuth;
   if (!auth) return {};
   return {
-    access: "super-admin" as const,
+    ...(access ? { access: access.kind } : {}),
     authenticatedAs: sessionSummaryFromLocals({
       user: auth.user,
       roles: auth.roles,
@@ -111,14 +154,31 @@ function errorStatus(e: unknown, fallback = 500): number {
  * Query: tenantId, suburb, search, limit, offset
  */
 router.get("/", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = await resolveSalesSuburbWorkshopAccess(auth.roles, auth.user.id);
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   try {
-    const result = await listSalesSuburbWorkshops(
-      parseListFilters(req.query as Record<string, unknown>)
-    );
+    const filters = parseListFilters(req.query as Record<string, unknown>);
+    const result =
+      access.kind === "agent"
+        ? await listAssignedSalesSuburbWorkshops({
+            agentId: access.agentId,
+            filters,
+          })
+        : await listSalesSuburbWorkshops(filters);
     res.json({
       success: true,
       ...result,
-      ...authExtras(res),
+      ...authExtras(res, access),
     });
   } catch (e) {
     const msg =
@@ -131,6 +191,18 @@ router.get("/", async (req, res) => {
  * GET /api/sales-suburb-workshops/:id
  */
 router.get("/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = await resolveSalesSuburbWorkshopAccess(auth.roles, auth.user.id);
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -145,10 +217,22 @@ router.get("/:id", async (req, res) => {
         .json({ success: false, error: "Sales suburb workshop not found." });
       return;
     }
+    if (
+      access.kind === "agent" &&
+      !(await agentMayViewSalesSuburbWorkshop({
+        agentId: access.agentId,
+        row,
+      }))
+    ) {
+      res
+        .status(404)
+        .json({ success: false, error: "Sales suburb workshop not found." });
+      return;
+    }
     res.json({
       success: true,
       data: row,
-      ...authExtras(res),
+      ...authExtras(res, access),
     });
   } catch (e) {
     const msg =
@@ -161,7 +245,7 @@ router.get("/:id", async (req, res) => {
  * POST /api/sales-suburb-workshops
  * Body: { tenantId, suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }
  */
-router.post("/", async (req, res) => {
+router.post("/", requireSalesSuburbWorkshopSuperAdmin, async (req, res) => {
   try {
     const data = await createSalesSuburbWorkshop(
       req.body as SalesSuburbWorkshopInput
@@ -169,7 +253,7 @@ router.post("/", async (req, res) => {
     res.status(201).json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =
@@ -182,7 +266,7 @@ router.post("/", async (req, res) => {
  * PATCH /api/sales-suburb-workshops/:id
  * Body: one or more of tenantId, suburb, workshopName, phoneNumber, ownerName, ownerEmail, location, website.
  */
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireSalesSuburbWorkshopSuperAdmin, async (req, res) => {
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -197,7 +281,7 @@ router.patch("/:id", async (req, res) => {
     res.json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =
@@ -209,7 +293,7 @@ router.patch("/:id", async (req, res) => {
 /**
  * DELETE /api/sales-suburb-workshops/:id
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireSalesSuburbWorkshopSuperAdmin, async (req, res) => {
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -221,7 +305,7 @@ router.delete("/:id", async (req, res) => {
     res.json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =

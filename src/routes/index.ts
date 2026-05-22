@@ -195,21 +195,21 @@ router.get("/", (_req, res) => {
       "PUT /api/agent-shift-schedules/:agentId":
         "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
       "GET /api/sales-suburb-workshops":
-        "List workshop suburbs — super admin only; filters: tenantId, suburb, search, limit, offset",
+        "List workshop suburbs — super admin: all; agent: assigned suburbs only. Filters: tenantId, suburb, search, limit, offset",
       "POST /api/sales-suburb-workshops":
         "Create workshop suburb — super admin only; body { tenantId, suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }",
       "GET /api/sales-suburb-workshops/:id":
-        "View one workshop suburb row — super admin only.",
+        "View one workshop suburb row — super admin: any; agent: assigned suburb only.",
       "PATCH /api/sales-suburb-workshops/:id":
         "Edit workshop suburb row — super admin only; body may include tenantId, suburb, workshopName, phoneNumber, ownerName, ownerEmail, location, website.",
       "DELETE /api/sales-suburb-workshops/:id":
         "Delete workshop suburb row — super admin only.",
       "GET /api/sales-agent-suburb-assignments":
-        "List sales agent suburb assignments — super admin only; filters: tenantId, agentId, suburb, search, limit, offset",
+        "List sales agent suburb assignments — super admin: all; agent: own only. Filters: tenantId, agentId, suburb, search, limit, offset",
       "POST /api/sales-agent-suburb-assignments":
         "Assign an agent to a suburb — super admin only; body { tenantId, agentId, suburb }",
       "GET /api/sales-agent-suburb-assignments/:id":
-        "View one sales agent suburb assignment — super admin only.",
+        "View one sales agent suburb assignment — super admin: any; agent: own only.",
       "PATCH /api/sales-agent-suburb-assignments/:id":
         "Edit a sales agent suburb assignment — super admin only; body may include tenantId, agentId, suburb.",
       "DELETE /api/sales-agent-suburb-assignments/:id":
