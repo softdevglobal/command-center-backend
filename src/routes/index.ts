@@ -12,6 +12,7 @@ import agentChatRoutes from "./supabase/agent-chat.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
 import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
+import salesSuburbWorkshopsRoutes from "./supabase/sales-suburb-workshops.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -192,6 +193,16 @@ router.get("/", (_req, res) => {
         "Get one shift schedule by agents.id — agent: own only; super admin: any",
       "PUT /api/agent-shift-schedules/:agentId":
         "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
+      "GET /api/sales-suburb-workshops":
+        "List workshop suburbs — super admin only; filters: tenantId, suburb, search, limit, offset",
+      "POST /api/sales-suburb-workshops":
+        "Create workshop suburb — super admin only; body { tenantId, suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }",
+      "GET /api/sales-suburb-workshops/:id":
+        "View one workshop suburb row — super admin only.",
+      "PATCH /api/sales-suburb-workshops/:id":
+        "Edit workshop suburb row — super admin only; body may include tenantId, suburb, workshopName, phoneNumber, ownerName, ownerEmail, location, website.",
+      "DELETE /api/sales-suburb-workshops/:id":
+        "Delete workshop suburb row — super admin only.",
     },
   });
 });
@@ -228,6 +239,9 @@ router.use("/agent-leave-requests", agentLeaveRequestsRoutes);
 
 /** Agent weekly shift schedules — Supabase `agent_shift_schedules`. */
 router.use("/agent-shift-schedules", agentShiftSchedulesRoutes);
+
+/** Sales workshop suburbs — Supabase `sales_suburb_workshops`. */
+router.use("/sales-suburb-workshops", salesSuburbWorkshopsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
