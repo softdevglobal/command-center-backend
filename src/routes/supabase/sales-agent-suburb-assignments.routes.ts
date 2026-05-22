@@ -10,6 +10,7 @@ import {
   updateSalesAgentSuburbAssignment,
 } from "../../services/sales-agent-suburb-assignments.service.js";
 import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.service.js";
+import { resolveAgentIdForUserViaSupabase } from "../../services/shared/agent-chat.pipeline.js";
 import type {
   SalesAgentSuburbAssignmentInput,
   SalesAgentSuburbAssignmentListFilters,
@@ -19,7 +20,6 @@ import type {
 const router = Router();
 
 router.use(attachSupabaseUser);
-router.use(requireSalesAgentSuburbAssignmentSuperAdmin);
 
 function queryString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
@@ -55,11 +55,52 @@ function requireSalesAgentSuburbAssignmentSuperAdmin(
   next();
 }
 
-function authExtras(res: Response) {
+function isSuperAdmin(roles: string[]): boolean {
+  return roles.some((r) => roleMayRegisterAgents(r));
+}
+
+function isAgent(roles: string[]): boolean {
+  return roles.includes("agent");
+}
+
+type SalesAgentSuburbAssignmentAccess =
+  | { kind: "super-admin"; agentId: string | null }
+  | { kind: "agent"; agentId: string };
+
+async function resolveSalesAgentSuburbAssignmentAccess(
+  roles: string[],
+  userId: string
+): Promise<SalesAgentSuburbAssignmentAccess | { error: string; status: number }> {
+  const linkedAgentId = await resolveAgentIdForUserViaSupabase({ userId });
+
+  if (isSuperAdmin(roles)) {
+    return { kind: "super-admin", agentId: linkedAgentId };
+  }
+
+  if (!isAgent(roles)) {
+    return {
+      status: 403,
+      error:
+        "Only super admins or agents may access sales agent suburb assignments. Sign in with an account that has the appropriate user_roles entry.",
+    };
+  }
+
+  if (!linkedAgentId) {
+    return {
+      status: 403,
+      error:
+        "No agent record linked to this user. Ensure agents.user_id matches your Supabase Auth user id.",
+    };
+  }
+
+  return { kind: "agent", agentId: linkedAgentId };
+}
+
+function authExtras(res: Response, access?: SalesAgentSuburbAssignmentAccess) {
   const auth = res.locals.supabaseAuth;
   if (!auth) return {};
   return {
-    access: "super-admin" as const,
+    ...(access ? { access: access.kind } : {}),
     authenticatedAs: sessionSummaryFromLocals({
       user: auth.user,
       roles: auth.roles,
@@ -114,14 +155,31 @@ function errorStatus(e: unknown, fallback = 500): number {
  * Query: tenantId, agentId, suburb, search, limit, offset
  */
 router.get("/", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = await resolveSalesAgentSuburbAssignmentAccess(
+    auth.roles,
+    auth.user.id
+  );
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   try {
-    const result = await listSalesAgentSuburbAssignments(
-      parseListFilters(req.query as Record<string, unknown>)
-    );
+    const filters = parseListFilters(req.query as Record<string, unknown>);
+    if (access.kind === "agent") {
+      filters.agentId = access.agentId;
+    }
+    const result = await listSalesAgentSuburbAssignments(filters);
     res.json({
       success: true,
       ...result,
-      ...authExtras(res),
+      ...authExtras(res, access),
     });
   } catch (e) {
     const msg =
@@ -136,6 +194,21 @@ router.get("/", async (req, res) => {
  * GET /api/sales-agent-suburb-assignments/:id
  */
 router.get("/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = await resolveSalesAgentSuburbAssignmentAccess(
+    auth.roles,
+    auth.user.id
+  );
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -151,10 +224,17 @@ router.get("/:id", async (req, res) => {
       });
       return;
     }
+    if (access.kind === "agent" && row.agent_id !== access.agentId) {
+      res.status(404).json({
+        success: false,
+        error: "Sales agent suburb assignment not found.",
+      });
+      return;
+    }
     res.json({
       success: true,
       data: row,
-      ...authExtras(res),
+      ...authExtras(res, access),
     });
   } catch (e) {
     const msg =
@@ -169,7 +249,7 @@ router.get("/:id", async (req, res) => {
  * POST /api/sales-agent-suburb-assignments
  * Body: { tenantId, agentId, suburb }
  */
-router.post("/", async (req, res) => {
+router.post("/", requireSalesAgentSuburbAssignmentSuperAdmin, async (req, res) => {
   try {
     const data = await createSalesAgentSuburbAssignment(
       req.body as SalesAgentSuburbAssignmentInput
@@ -177,7 +257,7 @@ router.post("/", async (req, res) => {
     res.status(201).json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =
@@ -192,7 +272,10 @@ router.post("/", async (req, res) => {
  * PATCH /api/sales-agent-suburb-assignments/:id
  * Body: one or more of tenantId, agentId, suburb.
  */
-router.patch("/:id", async (req, res) => {
+router.patch(
+  "/:id",
+  requireSalesAgentSuburbAssignmentSuperAdmin,
+  async (req, res) => {
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -207,7 +290,7 @@ router.patch("/:id", async (req, res) => {
     res.json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =
@@ -216,12 +299,16 @@ router.patch("/:id", async (req, res) => {
         : "Failed to update sales agent suburb assignment";
     res.status(errorStatus(e, 400)).json({ success: false, error: msg });
   }
-});
+  }
+);
 
 /**
  * DELETE /api/sales-agent-suburb-assignments/:id
  */
-router.delete("/:id", async (req, res) => {
+router.delete(
+  "/:id",
+  requireSalesAgentSuburbAssignmentSuperAdmin,
+  async (req, res) => {
   const id = paramId(req.params.id).trim();
   if (!id) {
     res.status(400).json({ success: false, error: "id is required." });
@@ -233,7 +320,7 @@ router.delete("/:id", async (req, res) => {
     res.json({
       success: true,
       data,
-      ...authExtras(res),
+      ...authExtras(res, { kind: "super-admin", agentId: null }),
     });
   } catch (e) {
     const msg =
@@ -242,6 +329,7 @@ router.delete("/:id", async (req, res) => {
         : "Failed to delete sales agent suburb assignment";
     res.status(errorStatus(e)).json({ success: false, error: msg });
   }
-});
+  }
+);
 
 export default router;

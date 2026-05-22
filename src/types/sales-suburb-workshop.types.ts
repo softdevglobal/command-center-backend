@@ -44,6 +44,11 @@ export type SalesSuburbWorkshopListResult = {
   offset: number;
 };
 
+export type SalesSuburbWorkshopAssignedListInput = {
+  agentId: string;
+  filters: SalesSuburbWorkshopListFilters;
+};
+
 export const SALES_SUBURB_WORKSHOP_PATCHABLE_FIELDS = [
   "tenantId",
   "suburb",
