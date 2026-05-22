@@ -2,6 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 
 import { getSuperAdminRoleForInsert } from "../../config/supabase-app-role.js";
 import {
+  provisionCallCenterLeadFirebaseIdentities,
+  type ProvisionLeadFirebaseResult,
+} from "../auth/provision-call-center-lead-firebase.service.js";
+import {
   getMissingSupabaseRegistrationEnv,
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
@@ -13,13 +17,25 @@ export type BootstrapSuperAdminBody = {
   displayName: string;
 };
 
+export type BootstrapSuperAdminResult = {
+  userId: string;
+  role: string;
+  firebase: ProvisionLeadFirebaseResult;
+};
+
 /**
- * Creates Supabase Auth user + `user_roles` row.
+ * Creates a Command Center super admin in **three** places:
+ *   1. Supabase Auth user + `user_roles.role = super_admin` (so Command Center login works).
+ *   2. Firebase **Black** Auth + Firestore `super_admins/{uid}` (so BMS Black call-center APIs accept the token).
+ *   3. Firebase **Pink**  Auth + Firestore `super_admins/{uid}` (so BMS Pink call-center APIs accept the token).
+ *
+ * Firebase step is best-effort: if Admin SDK credentials are missing on Command Center, Supabase still
+ * succeeds and the response surfaces a warning so the caller can fix env + retry.
  * Role label: SUPABASE_SUPER_ADMIN_ROLE or default `super_admin` (must exist on enum `app_role`).
  */
 export async function bootstrapSuperAdminSupabase(
   input: BootstrapSuperAdminBody
-): Promise<{ userId: string }> {
+): Promise<BootstrapSuperAdminResult> {
   const url = getSupabaseProjectUrl();
   const key = getSupabaseServiceRoleKey();
 
@@ -65,5 +81,28 @@ export async function bootstrapSuperAdminSupabase(
     );
   }
 
-  return { userId };
+  // Mirror into BMS Firebase (Auth + super_admins) so call-center proxies & BMS Firebase-backed
+  // routes accept this user's idToken — same shape as BMS Black/Pink `super_admins/{uid}` docs.
+  let firebase: ProvisionLeadFirebaseResult;
+  try {
+    firebase = await provisionCallCenterLeadFirebaseIdentities({
+      email: input.email,
+      password: input.password,
+      displayName: input.displayName.trim(),
+    });
+    if (firebase.warnings.length > 0) {
+      console.warn(
+        `[bootstrap super-admin] Firebase provisioning warnings: ${firebase.warnings.join(" | ")}`
+      );
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(
+      "[bootstrap super-admin] Firebase provisioning crashed (Supabase user still created):",
+      msg
+    );
+    firebase = { warnings: [`Firebase provisioning crashed: ${msg}`] };
+  }
+
+  return { userId, role: roleValue, firebase };
 }
