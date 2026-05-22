@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 
 import type {
   CallMetricsFilters,
@@ -21,7 +22,7 @@ function adminClient(
   supabaseUrl: string,
   serviceRoleKey: string
 ): SupabaseClient {
-  return createClient(supabaseUrl, serviceRoleKey);
+  return createSupabaseClient(supabaseUrl, serviceRoleKey);
 }
 
 function percent(part: number, total: number): number {

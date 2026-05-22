@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../db/supabase/supabase.client.js";
 import type { User } from "@supabase/supabase-js";
 
 import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
@@ -27,7 +27,7 @@ async function fetchRolesForUser(
   const key = getSupabaseServiceRoleKey();
   if (!url || !key) return [];
 
-  const admin = createClient(url, key);
+  const admin = createSupabaseClient(url, key);
   const { data, error } = await admin
     .from("user_roles")
     .select("role")
@@ -62,7 +62,7 @@ export async function attachSupabaseUser(
   }
 
   try {
-    const admin = createClient(url, key);
+    const admin = createSupabaseClient(url, key);
     const {
       data: { user },
       error,

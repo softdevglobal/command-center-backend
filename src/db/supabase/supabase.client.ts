@@ -1,4 +1,18 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type SupabaseClient,
+  type SupabaseClientOptions,
+} from "@supabase/supabase-js";
+import ws from "ws";
+
+/** Prefer this over raw `createClient` so Realtime works on Node < 22 (needs `ws` on the server). */
+export function createSupabaseClient(url: string, key: string): SupabaseClient {
+  return createClient(url, key, {
+    realtime: {
+      transport: ws,
+    },
+  } as SupabaseClientOptions<"public">);
+}
 
 let cached: SupabaseClient | null | undefined;
 
@@ -93,6 +107,6 @@ export function getSupabaseClient(): SupabaseClient | null {
     return null;
   }
 
-  cached = createClient(url, key);
+  cached = createSupabaseClient(url, key);
   return cached;
 }

@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 
 import type { AgentType, CreateAgentRequestBody } from "../../types/agent-registration.types.js";
 import { ensureFirebaseBlackAuthUser } from "./ensure-firebase-black-auth-user.service.js";
@@ -22,7 +23,7 @@ export async function registerCommandCenterAgentInSupabase(input: {
 }): Promise<RegisterCommandCenterAgentSupabaseResult> {
   const { supabaseUrl, serviceRoleKey, body } = input;
 
-  const supabaseAdmin: SupabaseClient = createClient(
+  const supabaseAdmin: SupabaseClient = createSupabaseClient(
     supabaseUrl,
     serviceRoleKey
   );

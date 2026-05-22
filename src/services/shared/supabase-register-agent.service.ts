@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 
 import type {
   AgentType,
@@ -18,7 +19,7 @@ export async function registerAgentInSupabase(input: {
 }): Promise<{ agentId: string; userId: string }> {
   const { supabaseUrl, serviceRoleKey, body } = input;
 
-  const supabaseAdmin: SupabaseClient = createClient(
+  const supabaseAdmin: SupabaseClient = createSupabaseClient(
     supabaseUrl,
     serviceRoleKey
   );

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 
 import {
   getSupabaseAnonKeyForEdge,
@@ -68,7 +68,7 @@ async function fetchRoles(userId: string): Promise<string[]> {
   const key = getSupabaseServiceRoleKey();
   if (!url || !key) return [];
 
-  const admin = createClient(url, key);
+  const admin = createSupabaseClient(url, key);
   const { data, error } = await admin
     .from("user_roles")
     .select("role")
@@ -111,7 +111,7 @@ export async function loginWithSupabasePassword(
     };
   }
 
-  const supabase = createClient(url, anon);
+  const supabase = createSupabaseClient(url, anon);
   const { data, error } = await supabase.auth.signInWithPassword({
     email: input.email.trim(),
     password: input.password,

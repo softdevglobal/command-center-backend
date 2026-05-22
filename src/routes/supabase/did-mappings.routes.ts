@@ -1,4 +1,5 @@
-import { createClient, type User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 import { Router, type Request, type Response } from "express";
 
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
@@ -62,7 +63,7 @@ async function authorizeDidMappingsRequest(
   }
 
   try {
-    const admin = createClient(url, key);
+    const admin = createSupabaseClient(url, key);
     const {
       data: { user },
       error: userErr,

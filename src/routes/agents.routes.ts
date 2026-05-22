@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../db/supabase/supabase.client.js";
 import { Router, type Response } from "express";
 
 import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
@@ -499,7 +499,7 @@ router.post("/register", async (req, res) => {
   }
 
   try {
-    const admin = createClient(url, key);
+    const admin = createSupabaseClient(url, key);
     const {
       data: { user },
       error: userErr,

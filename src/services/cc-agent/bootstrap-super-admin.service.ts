@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "../../db/supabase/supabase.client.js";
 
 import { getSuperAdminRoleForInsert } from "../../config/supabase-app-role.js";
 import {
@@ -50,7 +50,7 @@ export async function bootstrapSuperAdminSupabase(
 
   const roleValue = getSuperAdminRoleForInsert();
 
-  const admin = createClient(url, key);
+  const admin = createSupabaseClient(url, key);
 
   const { data: newUser, error: userErr } = await admin.auth.admin.createUser({
     email: input.email.trim(),
