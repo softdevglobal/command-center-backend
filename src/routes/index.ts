@@ -13,6 +13,7 @@ import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
 import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
 import salesSuburbWorkshopsRoutes from "./supabase/sales-suburb-workshops.routes.js";
+import salesAgentSuburbAssignmentsRoutes from "./supabase/sales-agent-suburb-assignments.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -203,6 +204,16 @@ router.get("/", (_req, res) => {
         "Edit workshop suburb row — super admin only; body may include tenantId, suburb, workshopName, phoneNumber, ownerName, ownerEmail, location, website.",
       "DELETE /api/sales-suburb-workshops/:id":
         "Delete workshop suburb row — super admin only.",
+      "GET /api/sales-agent-suburb-assignments":
+        "List sales agent suburb assignments — super admin only; filters: tenantId, agentId, suburb, search, limit, offset",
+      "POST /api/sales-agent-suburb-assignments":
+        "Assign an agent to a suburb — super admin only; body { tenantId, agentId, suburb }",
+      "GET /api/sales-agent-suburb-assignments/:id":
+        "View one sales agent suburb assignment — super admin only.",
+      "PATCH /api/sales-agent-suburb-assignments/:id":
+        "Edit a sales agent suburb assignment — super admin only; body may include tenantId, agentId, suburb.",
+      "DELETE /api/sales-agent-suburb-assignments/:id":
+        "Delete a sales agent suburb assignment — super admin only.",
     },
   });
 });
@@ -242,6 +253,9 @@ router.use("/agent-shift-schedules", agentShiftSchedulesRoutes);
 
 /** Sales workshop suburbs — Supabase `sales_suburb_workshops`. */
 router.use("/sales-suburb-workshops", salesSuburbWorkshopsRoutes);
+
+/** Sales agent suburb assignments — Supabase `sales_agent_suburb_assignments`. */
+router.use("/sales-agent-suburb-assignments", salesAgentSuburbAssignmentsRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
