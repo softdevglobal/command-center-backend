@@ -153,36 +153,32 @@ export async function listAssignedSalesSuburbWorkshopsInSupabase(input: {
   const { data: assignmentRows, error: assignmentError } = await assignmentQuery;
   if (assignmentError) throw new Error(assignmentError.message);
 
-  const scopes = new Map<string, { tenant_id: string; suburb_normalized: string }>();
+  const assignedSuburbs = new Set<string>();
   for (const row of assignmentRows ?? []) {
     const scope = row as { tenant_id?: string; suburb?: string };
-    const scopeTenantId = scope.tenant_id?.trim();
     const scopeSuburb = normalizedSuburb(scope.suburb ?? "");
-    if (!scopeTenantId || !scopeSuburb) continue;
-    scopes.set(`${scopeTenantId}\u0000${scopeSuburb}`, {
-      tenant_id: scopeTenantId,
-      suburb_normalized: scopeSuburb,
-    });
+    if (scopeSuburb) assignedSuburbs.add(scopeSuburb);
   }
 
+  if (assignedSuburbs.size === 0) {
+    return { data: [], total: 0, limit, offset };
+  }
+
+  let q = supabase
+    .from("sales_suburb_workshops")
+    .select("*")
+    .in("suburb_normalized", [...assignedSuburbs]);
+
+  if (tenantId) q = q.eq("tenant_id", tenantId);
+  q = applyWorkshopSearch(q, search);
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+
   const rowsById = new Map<string, SalesSuburbWorkshopRow>();
-  await Promise.all(
-    [...scopes.values()].map(async (scope) => {
-      let q = supabase
-        .from("sales_suburb_workshops")
-        .select("*")
-        .eq("tenant_id", scope.tenant_id)
-        .eq("suburb_normalized", scope.suburb_normalized);
-
-      q = applyWorkshopSearch(q, search);
-
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      for (const row of (data ?? []) as SalesSuburbWorkshopRow[]) {
-        rowsById.set(row.id, row);
-      }
-    })
-  );
+  for (const row of (data ?? []) as SalesSuburbWorkshopRow[]) {
+    rowsById.set(row.id, row);
+  }
 
   const sorted = [...rowsById.values()].sort((a, b) => {
     const suburbCompare = a.suburb_normalized.localeCompare(b.suburb_normalized);
@@ -212,7 +208,6 @@ export async function agentMayViewSalesSuburbWorkshopInSupabase(input: {
     .from("sales_agent_suburb_assignments")
     .select("id")
     .eq("agent_id", agentId)
-    .eq("tenant_id", input.row.tenant_id)
     .ilike("suburb", input.row.suburb_normalized)
     .limit(1);
 
