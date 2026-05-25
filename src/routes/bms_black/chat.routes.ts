@@ -36,7 +36,7 @@ function conversationIdParam(raw: unknown): string {
  * **Upstream Black:** stored Firebase idToken; `X-Tenant-Id` header optional.
  */
 router.get("/agent/conversations", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const query: {
@@ -73,7 +73,7 @@ router.get(
   "/agent/conversations/:conversationId/messages",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const conversationId = conversationIdParam(req.params.conversationId);
@@ -106,7 +106,7 @@ router.post(
   "/agent/conversations/:conversationId/messages",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const conversationId = conversationIdParam(req.params.conversationId);
@@ -133,7 +133,7 @@ router.post(
   "/agent/conversations/:conversationId/claim",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const conversationId = conversationIdParam(req.params.conversationId);
@@ -160,7 +160,7 @@ router.post(
   "/agent/conversations/:conversationId/read",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const conversationId = conversationIdParam(req.params.conversationId);
@@ -183,7 +183,7 @@ router.post(
   "/agent/conversations/:conversationId/close",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const conversationId = conversationIdParam(req.params.conversationId);
@@ -212,7 +212,7 @@ function chatIdParam(raw: unknown): string {
  * Headers: Authorization (Supabase Bearer); optional X-Tenant-Id.
  */
 router.get("/chats/workshop-owners", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   await runBlackProxy(res, () =>
@@ -230,7 +230,7 @@ router.get("/chats/workshop-owners", attachSupabaseUser, async (req, res) => {
  * Headers: Authorization; optional X-Tenant-Id.
  */
 router.post("/chats/start-with-owner", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const body =
@@ -257,7 +257,7 @@ router.post("/chats/start-with-owner", attachSupabaseUser, async (req, res) => {
  * Headers: Authorization; optional X-Tenant-Id.
  */
 router.get("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const chatId = chatIdParam(req.params.chatId);
@@ -289,7 +289,7 @@ router.get("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
  * Headers: Authorization; optional X-Tenant-Id.
  */
 router.post("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const chatId = chatIdParam(req.params.chatId);
@@ -318,7 +318,7 @@ router.post("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
  * — that is support-chat only (different conversation ids).
  */
 router.post("/chats/:chatId/close", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const chatId = chatIdParam(req.params.chatId);

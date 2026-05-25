@@ -32,7 +32,7 @@ const router = Router();
  * (Firebase Bearer only — no X-Tenant-Id.)
  */
 router.get("/getallbooking", attachSupabaseUser, async (_req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
   await runBlackProxy(res, () =>
     proxyBlackCallCenterBookings(ctx.firebaseIdToken)
@@ -48,7 +48,7 @@ router.get(
   "/bookings/availability",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const branchId = singleQuery(req.query.branchId);
@@ -78,7 +78,7 @@ router.get(
  * Headers: Authorization + X-Tenant-Id (BMS owner uid).
  */
 router.get("/staff", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const branchId = singleQuery(req.query.branchId);
@@ -110,7 +110,7 @@ router.get("/staff", attachSupabaseUser, async (req, res) => {
  * Headers: Authorization + X-Tenant-Id (BMS owner uid).
  */
 router.post("/bookings", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   await runBlackProxy(res, () =>
@@ -131,7 +131,7 @@ router.patch(
   "/bookings/:bookingId/reschedule",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();
@@ -160,7 +160,7 @@ router.post(
   "/bookings/:bookingId/cancel",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();
@@ -189,7 +189,7 @@ router.get(
   "/bookings/:bookingId/additional-issues",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();
@@ -217,7 +217,7 @@ router.patch(
   "/bookings/:bookingId/additional-issues/:issueId",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();
@@ -252,7 +252,7 @@ router.patch(
   "/bookings/:bookingId/additional-issues/:issueId/price",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();
@@ -284,7 +284,7 @@ router.patch(
  * Headers: Authorization + X-Tenant-Id (BMS owner uid).
  */
 router.get("/bookings/:bookingId", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const bookingId = String(req.params.bookingId ?? "").trim();
@@ -317,7 +317,7 @@ async function updateBookingStatusHandler(
   req: Request,
   res: Response
 ): Promise<void> {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const bookingId = String(req.params.bookingId ?? "").trim();
@@ -419,7 +419,7 @@ router.post(
   "/bookings/:bookingId/confirm",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const bookingId = String(req.params.bookingId ?? "").trim();

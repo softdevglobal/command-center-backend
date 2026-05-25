@@ -20,7 +20,7 @@ const router = Router();
  * Upstream: GET /api/call-center/services
  */
 router.get("/services", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
   await runBlackProxy(res, () =>
     proxyBlackCallCenterServices(ctx.firebaseIdToken, ctx.tenantId)
@@ -32,7 +32,7 @@ router.get("/services", attachSupabaseUser, async (req, res) => {
  * Upstream: GET /api/call-center/services?branchId=...
  */
 router.get("/services-by-branch", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const branchId = singleQuery(req.query.branchId);
@@ -60,7 +60,7 @@ router.get(
   "/services/:serviceId/staff",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveBlackTenantProxyContext(req, res);
+    const ctx = await resolveBlackTenantProxyContext(req, res);
     if (!ctx) return;
 
     const serviceId = String(req.params.serviceId ?? "").trim();
@@ -94,7 +94,7 @@ router.get(
  * Upstream: GET /api/call-center/services/:id
  */
 router.get("/services/:id", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const serviceId = String(req.params.id ?? "").trim();

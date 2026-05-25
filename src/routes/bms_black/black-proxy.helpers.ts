@@ -45,9 +45,9 @@ export type BlackTenantProxyContext = FirebaseBlackProxyContext & {
   tenantId: string;
 };
 
-export function resolveFirebaseBlackProxyContext(
+export async function resolveFirebaseBlackProxyContext(
   res: Response
-): FirebaseBlackProxyContext | null {
+): Promise<FirebaseBlackProxyContext | null> {
   const auth = res.locals.supabaseAuth as SupabaseAuthLocals | undefined;
   const supabaseUserId = auth?.user?.id;
   if (!supabaseUserId) {
@@ -55,7 +55,10 @@ export function resolveFirebaseBlackProxyContext(
     return null;
   }
 
-  const firebaseIdToken = getFirebaseIdTokenForSupabaseUser(supabaseUserId);
+  // Async getter — refreshes the cached Firebase Black idToken via the Secure Token API
+  // when it is within the refresh skew window of expiry, so long-lived Supabase sessions
+  // don't break the BMS Black proxy after the ~1 hour Firebase idToken lifetime.
+  const firebaseIdToken = await getFirebaseIdTokenForSupabaseUser(supabaseUserId);
   if (!firebaseIdToken) {
     res.status(403).json({ error: NO_FIREBASE_TOKEN_ERROR });
     return null;
@@ -70,11 +73,11 @@ export function optionalTenantId(req: Request): string | undefined {
   return tid || undefined;
 }
 
-export function resolveBlackTenantProxyContext(
+export async function resolveBlackTenantProxyContext(
   req: Request,
   res: Response
-): BlackTenantProxyContext | null {
-  const base = resolveFirebaseBlackProxyContext(res);
+): Promise<BlackTenantProxyContext | null> {
+  const base = await resolveFirebaseBlackProxyContext(res);
   if (!base) return null;
 
   const tenantId = singleHeader(req.headers["x-tenant-id"]);

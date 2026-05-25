@@ -172,6 +172,8 @@ export async function loginWithSupabasePassword(
         rememberFirebaseBlackIdentityForUser({
           supabaseUserId: data.user.id,
           idToken,
+          refreshToken: d.refreshToken,
+          expiresIn: d.expiresIn,
           email: d.email ?? input.email.trim(),
         });
         // Firebase Black idToken stored server-side (firebase-black-login.store.ts).
@@ -228,6 +230,8 @@ export async function loginWithSupabasePassword(
         rememberFirebasePinkIdentityForUser({
           supabaseUserId: data.user.id,
           idToken: idTokenPink,
+          refreshToken: pd.refreshToken,
+          expiresIn: pd.expiresIn,
           email: pd.email ?? input.email.trim(),
         });
         // Firebase Pink idToken stored server-side (firebase-pink-login.store.ts).
