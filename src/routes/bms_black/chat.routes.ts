@@ -13,6 +13,7 @@ import {
   proxyBlackCallCenterChatClose,
   proxyBlackCallCenterChatMessages,
   proxyBlackCallCenterChatPostMessage,
+  proxyBlackCallCenterChatsList,
   proxyBlackCallCenterChatStartWithOwner,
   proxyBlackCallCenterChatWorkshopOwners,
 } from "../../services/bms_black/black-call-center-chats.proxy.service.js";
@@ -205,6 +206,34 @@ router.post(
 function chatIdParam(raw: unknown): string {
   return String(raw ?? "").trim();
 }
+
+/**
+ * GET /api/bms-black/chats?limit=&ownerUid=&tenantId=
+ * Upstream: GET https://black.bmspros.com.au/api/call-center/chats
+ *
+ * Lists call-center 1:1 chats visible to the caller (agents: their assigned chats + pending queue).
+ * Used by the inbox so a started workshop chat stays reachable from the chat list.
+ */
+router.get("/chats", attachSupabaseUser, async (req, res) => {
+  const ctx = await resolveFirebaseBlackProxyContext(res);
+  if (!ctx) return;
+
+  const query: { limit?: string; ownerUid?: string; tenantId?: string } = {};
+  const limit = singleQuery(req.query.limit);
+  const ownerUid = singleQuery(req.query.ownerUid);
+  const tenantId = singleQuery(req.query.tenantId);
+  if (limit) query.limit = limit;
+  if (ownerUid) query.ownerUid = ownerUid;
+  if (tenantId) query.tenantId = tenantId;
+
+  await runBlackProxy(res, () =>
+    proxyBlackCallCenterChatsList(
+      ctx.firebaseIdToken,
+      query,
+      optionalTenantId(req)
+    )
+  );
+});
 
 /**
  * GET /api/bms-black/chats/workshop-owners
