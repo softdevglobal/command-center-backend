@@ -14,6 +14,7 @@ import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js"
 import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
 import salesSuburbWorkshopsRoutes from "./supabase/sales-suburb-workshops.routes.js";
 import salesAgentSuburbAssignmentsRoutes from "./supabase/sales-agent-suburb-assignments.routes.js";
+import salesSuburbWorkshopAgentContactsRoutes from "./supabase/sales-suburb-workshop-agent-contacts.routes.js";
 import bmsBlackCallCenterBookingRoutes from "./bms_black/booking.routes.js";
 import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
@@ -214,6 +215,18 @@ router.get("/", (_req, res) => {
         "Edit a sales agent suburb assignment — super admin only; body may include tenantId, agentId, suburb.",
       "DELETE /api/sales-agent-suburb-assignments/:id":
         "Delete a sales agent suburb assignment — super admin only.",
+      "GET /api/sales-suburb-workshop-agent-contacts":
+        "List workshop agent contact rows — super admin: all; agent: own only. Filters: tenantId, workshopId, agentId, callStatus, from, to, limit, offset",
+      "GET /api/sales-suburb-workshop-agent-contacts/workshops/:workshopId":
+        "Get one contact row by workshop — agent: own row; super admin: pass ?agentId=.",
+      "POST /api/sales-suburb-workshop-agent-contacts":
+        "Create workshop contact row — agent: assigned workshops only; super admin: any. Body { workshopId, agentId?, callStatus?, firstCalledAt?, followUpAt?, remarks? }",
+      "GET /api/sales-suburb-workshop-agent-contacts/:id":
+        "View one workshop contact row — super admin: any; agent: own only.",
+      "PATCH /api/sales-suburb-workshop-agent-contacts/:id":
+        "Update workshop contact row — agent: own callStatus/firstCalledAt/followUpAt/remarks only; super admin: any patchable field.",
+      "DELETE /api/sales-suburb-workshop-agent-contacts/:id":
+        "Delete workshop contact row — super admin only.",
     },
   });
 });
@@ -256,6 +269,12 @@ router.use("/sales-suburb-workshops", salesSuburbWorkshopsRoutes);
 
 /** Sales agent suburb assignments — Supabase `sales_agent_suburb_assignments`. */
 router.use("/sales-agent-suburb-assignments", salesAgentSuburbAssignmentsRoutes);
+
+/** Sales workshop agent contact tracking — Supabase `sales_suburb_workshop_agent_contact`. */
+router.use(
+  "/sales-suburb-workshop-agent-contacts",
+  salesSuburbWorkshopAgentContactsRoutes
+);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
