@@ -16,7 +16,7 @@ export type SalesSuburbWorkshopRow = {
 
 /** POST /api/sales-suburb-workshops body (camelCase). */
 export type SalesSuburbWorkshopInput = {
-  tenantId: string;
+  tenantId?: string;
   suburb: string;
   workshopName?: string;
   phoneNumber?: string;

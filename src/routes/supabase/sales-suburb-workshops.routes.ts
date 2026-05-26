@@ -3,6 +3,7 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { attachSupabaseUser } from "../../middleware/supabase-auth.middleware.js";
 import {
+  agentMayCreateSalesSuburbWorkshop,
   agentMayViewSalesSuburbWorkshop,
   createSalesSuburbWorkshop,
   deleteSalesSuburbWorkshop,
@@ -20,6 +21,7 @@ import type {
 } from "../../types/sales-suburb-workshop.types.js";
 
 const router = Router();
+const SALES_WORKSHOP_TENANT_ID = "t-1775956177847";
 
 router.use(attachSupabaseUser);
 
@@ -50,7 +52,7 @@ function requireSalesSuburbWorkshopSuperAdmin(
     res.status(403).json({
       success: false,
       error:
-        "Only super admins may manage sales suburb workshops. Ensure user_roles.role matches SUPABASE_SUPER_ADMIN_ROLE or super_admin / admin.",
+        "Only super admins may edit or delete sales suburb workshops. Agents may create workshops only for assigned suburbs.",
     });
     return;
   }
@@ -149,6 +151,15 @@ function errorStatus(e: unknown, fallback = 500): number {
   return fallback;
 }
 
+function bodyString(
+  body: Record<string, unknown>,
+  camel: string,
+  snake: string
+): string {
+  const value = body[camel] ?? body[snake];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 /**
  * GET /api/sales-suburb-workshops
  * Query: tenantId, suburb, search, limit, offset
@@ -243,17 +254,60 @@ router.get("/:id", async (req, res) => {
 
 /**
  * POST /api/sales-suburb-workshops
- * Body: { tenantId, suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }
+ * Super admin: any row. Agent: only assigned suburb. tenantId is always fixed by the API.
+ * Body: { suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }
  */
-router.post("/", requireSalesSuburbWorkshopSuperAdmin, async (req, res) => {
+router.post("/", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const access = await resolveSalesSuburbWorkshopAccess(auth.roles, auth.user.id);
+  if ("error" in access) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
+  const body = req.body as SalesSuburbWorkshopInput & Record<string, unknown>;
+  const tenantId = SALES_WORKSHOP_TENANT_ID;
+  const suburb = bodyString(body, "suburb", "suburb");
+
+  if (access.kind === "agent") {
+    if (!suburb) {
+      res.status(400).json({
+        success: false,
+        error: "suburb is required.",
+      });
+      return;
+    }
+
+    const allowed = await agentMayCreateSalesSuburbWorkshop({
+      agentId: access.agentId,
+      tenantId,
+      suburb,
+    });
+    if (!allowed) {
+      res.status(403).json({
+        success: false,
+        error: "Agents may only add workshops for assigned suburbs.",
+      });
+      return;
+    }
+  }
+
   try {
-    const data = await createSalesSuburbWorkshop(
-      req.body as SalesSuburbWorkshopInput
-    );
+    const createBody: SalesSuburbWorkshopInput = {
+      ...body,
+      tenantId,
+      suburb,
+    };
+    const data = await createSalesSuburbWorkshop(createBody);
     res.status(201).json({
       success: true,
       data,
-      ...authExtras(res, { kind: "super-admin", agentId: null }),
+      ...authExtras(res, access),
     });
   } catch (e) {
     const msg =

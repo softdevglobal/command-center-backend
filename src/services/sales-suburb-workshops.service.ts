@@ -7,9 +7,11 @@ import type {
   SalesSuburbWorkshopUpdateInput,
 } from "../types/sales-suburb-workshop.types.js";
 import {
+  agentMayCreateSalesSuburbWorkshopViaSupabase,
   agentMayViewSalesSuburbWorkshopViaSupabase,
   createSalesSuburbWorkshopViaSupabase,
   deleteSalesSuburbWorkshopViaSupabase,
+  getAgentAssignedTenantIdForSuburbViaSupabase,
   getSalesSuburbWorkshopByIdViaSupabase,
   listAssignedSalesSuburbWorkshopsViaSupabase,
   listSalesSuburbWorkshopsViaSupabase,
@@ -39,6 +41,21 @@ export async function agentMayViewSalesSuburbWorkshop(input: {
   row: SalesSuburbWorkshopRow;
 }): Promise<boolean> {
   return agentMayViewSalesSuburbWorkshopViaSupabase(input);
+}
+
+export async function agentMayCreateSalesSuburbWorkshop(input: {
+  agentId: string;
+  tenantId: string;
+  suburb: string;
+}): Promise<boolean> {
+  return agentMayCreateSalesSuburbWorkshopViaSupabase(input);
+}
+
+export async function getAgentAssignedTenantIdForSuburb(input: {
+  agentId: string;
+  suburb: string;
+}): Promise<string | null> {
+  return getAgentAssignedTenantIdForSuburbViaSupabase(input);
 }
 
 export async function createSalesSuburbWorkshop(

@@ -12,9 +12,11 @@ import type {
   SalesSuburbWorkshopUpdateInput,
 } from "../../types/sales-suburb-workshop.types.js";
 import {
+  agentMayCreateSalesSuburbWorkshopInSupabase,
   agentMayViewSalesSuburbWorkshopInSupabase,
   createSalesSuburbWorkshopInSupabase,
   deleteSalesSuburbWorkshopInSupabase,
+  getAgentAssignedTenantIdForSuburbInSupabase,
   getSalesSuburbWorkshopByIdInSupabase,
   listAssignedSalesSuburbWorkshopsInSupabase,
   listSalesSuburbWorkshopsInSupabase,
@@ -84,6 +86,34 @@ export async function agentMayViewSalesSuburbWorkshopViaSupabase(input: {
     serviceRoleKey,
     agentId: input.agentId,
     row: input.row,
+  });
+}
+
+export async function agentMayCreateSalesSuburbWorkshopViaSupabase(input: {
+  agentId: string;
+  tenantId: string;
+  suburb: string;
+}): Promise<boolean> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForSalesSuburbWorkshops();
+  return agentMayCreateSalesSuburbWorkshopInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    agentId: input.agentId,
+    tenantId: input.tenantId,
+    suburb: input.suburb,
+  });
+}
+
+export async function getAgentAssignedTenantIdForSuburbViaSupabase(input: {
+  agentId: string;
+  suburb: string;
+}): Promise<string | null> {
+  const { supabaseUrl, serviceRoleKey } = assertSupabaseForSalesSuburbWorkshops();
+  return getAgentAssignedTenantIdForSuburbInSupabase({
+    supabaseUrl,
+    serviceRoleKey,
+    agentId: input.agentId,
+    suburb: input.suburb,
   });
 }
 
