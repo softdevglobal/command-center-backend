@@ -198,7 +198,7 @@ router.get("/", (_req, res) => {
       "GET /api/sales-suburb-workshops":
         "List workshop suburbs — super admin: all; agent: assigned suburbs only. Filters: tenantId, suburb, search, limit, offset",
       "POST /api/sales-suburb-workshops":
-        "Create workshop suburb — super admin only; body { tenantId, suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }",
+        "Create workshop suburb — tenantId is fixed to t-1775956177847; agent: assigned suburb only. Body { suburb, workshopName?, phoneNumber?, ownerName?, ownerEmail?, location?, website? }",
       "GET /api/sales-suburb-workshops/:id":
         "View one workshop suburb row — super admin: any; agent: assigned suburb only.",
       "PATCH /api/sales-suburb-workshops/:id":

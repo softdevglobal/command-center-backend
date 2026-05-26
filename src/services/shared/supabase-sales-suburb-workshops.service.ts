@@ -215,6 +215,55 @@ export async function agentMayViewSalesSuburbWorkshopInSupabase(input: {
   return (data ?? []).length > 0;
 }
 
+export async function agentMayCreateSalesSuburbWorkshopInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  agentId: string;
+  tenantId: string;
+  suburb: string;
+}): Promise<boolean> {
+  const agentId = input.agentId.trim();
+  const suburb = normalizedSuburb(input.suburb);
+  if (!agentId || !suburb) return false;
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  const { data, error } = await supabase
+    .from("sales_agent_suburb_assignments")
+    .select("id")
+    .eq("agent_id", agentId)
+    .ilike("suburb", suburb)
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+export async function getAgentAssignedTenantIdForSuburbInSupabase(input: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  agentId: string;
+  suburb: string;
+}): Promise<string | null> {
+  const agentId = input.agentId.trim();
+  const suburb = normalizedSuburb(input.suburb);
+  if (!agentId || !suburb) return null;
+
+  const supabase = adminClient(input.supabaseUrl, input.serviceRoleKey);
+  const { data, error } = await supabase
+    .from("sales_agent_suburb_assignments")
+    .select("tenant_id")
+    .eq("agent_id", agentId)
+    .ilike("suburb", suburb)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error) throw new Error(error.message);
+  const row = (data ?? [])[0] as { tenant_id?: string } | undefined;
+  return typeof row?.tenant_id === "string" && row.tenant_id.trim() !== ""
+    ? row.tenant_id
+    : null;
+}
+
 export async function getSalesSuburbWorkshopByIdInSupabase(input: {
   supabaseUrl: string;
   serviceRoleKey: string;
