@@ -210,20 +210,37 @@ function sanitizeAgentUpdateBody(
   const patch: SalesSuburbWorkshopAgentContactUpdateInput = {};
   const source = body as SalesSuburbWorkshopAgentContactUpdateInput & {
     call_status?: string | null;
+    status?: string | null;
     first_called_at?: string | null;
+    calledAt?: string | null;
+    called_at?: string | null;
     follow_up_at?: string | null;
+    followUpDate?: string | null;
+    follow_up_date?: string | null;
+    remark?: string;
+    notes?: string;
+    note?: string;
   };
 
-  const callStatus = body.callStatus ?? source.call_status;
+  const callStatus = body.callStatus ?? source.call_status ?? source.status;
   if (callStatus !== undefined) patch.callStatus = callStatus;
 
-  const firstCalledAt = body.firstCalledAt ?? source.first_called_at;
+  const firstCalledAt =
+    body.firstCalledAt ??
+    source.first_called_at ??
+    source.calledAt ??
+    source.called_at;
   if (firstCalledAt !== undefined) patch.firstCalledAt = firstCalledAt;
 
-  const followUpAt = body.followUpAt ?? source.follow_up_at;
+  const followUpAt =
+    body.followUpAt ??
+    source.follow_up_at ??
+    source.followUpDate ??
+    source.follow_up_date;
   if (followUpAt !== undefined) patch.followUpAt = followUpAt;
 
-  if (body.remarks !== undefined) patch.remarks = body.remarks;
+  const remarks = body.remarks ?? source.remark ?? source.notes ?? source.note;
+  if (remarks !== undefined) patch.remarks = remarks;
 
   return patch;
 }

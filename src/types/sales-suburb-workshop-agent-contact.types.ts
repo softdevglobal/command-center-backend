@@ -99,6 +99,17 @@ function readNullableStringAlias(
   return nullableStringField(input[snake]);
 }
 
+function readNullableStringAliases(
+  input: Record<string, unknown>,
+  aliases: string[]
+): string | null | undefined {
+  for (const alias of aliases) {
+    const value = nullableStringField(input[alias]);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 function readOptionalStringAlias(
   input: Record<string, unknown>,
   camel: string,
@@ -117,11 +128,23 @@ export function toSalesSuburbWorkshopAgentContactInsertRow(
     tenant_id: readStringAlias(source, "tenantId", "tenant_id") ?? "",
     workshop_id: readStringAlias(source, "workshopId", "workshop_id") ?? "",
     agent_id: readStringAlias(source, "agentId", "agent_id") ?? "",
-    call_status: readNullableStringAlias(source, "callStatus", "call_status") ?? null,
+    call_status:
+      readNullableStringAliases(source, ["callStatus", "call_status", "status"]) ??
+      null,
     first_called_at:
-      readNullableStringAlias(source, "firstCalledAt", "first_called_at") ?? null,
+      readNullableStringAliases(source, [
+        "firstCalledAt",
+        "first_called_at",
+        "calledAt",
+        "called_at",
+      ]) ?? null,
     follow_up_at:
-      readNullableStringAlias(source, "followUpAt", "follow_up_at") ?? null,
+      readNullableStringAliases(source, [
+        "followUpAt",
+        "follow_up_at",
+        "followUpDate",
+        "follow_up_date",
+      ]) ?? null,
     remarks: readOptionalStringAlias(source, "remarks", "remarks") ?? "",
   };
 }
@@ -141,20 +164,34 @@ export function toSalesSuburbWorkshopAgentContactUpdatePatch(
   const agentId = readStringAlias(source, "agentId", "agent_id");
   if (agentId !== undefined) patch.agent_id = agentId;
 
-  const callStatus = readNullableStringAlias(source, "callStatus", "call_status");
+  const callStatus = readNullableStringAliases(source, [
+    "callStatus",
+    "call_status",
+    "status",
+  ]);
   if (callStatus !== undefined) patch.call_status = callStatus;
 
-  const firstCalledAt = readNullableStringAlias(
-    source,
+  const firstCalledAt = readNullableStringAliases(source, [
     "firstCalledAt",
-    "first_called_at"
-  );
+    "first_called_at",
+    "calledAt",
+    "called_at",
+  ]);
   if (firstCalledAt !== undefined) patch.first_called_at = firstCalledAt;
 
-  const followUpAt = readNullableStringAlias(source, "followUpAt", "follow_up_at");
+  const followUpAt = readNullableStringAliases(source, [
+    "followUpAt",
+    "follow_up_at",
+    "followUpDate",
+    "follow_up_date",
+  ]);
   if (followUpAt !== undefined) patch.follow_up_at = followUpAt;
 
-  const remarks = readOptionalStringAlias(source, "remarks", "remarks");
+  const remarks =
+    readOptionalStringAlias(source, "remarks", "remarks") ??
+    readOptionalStringAlias(source, "remark", "remark") ??
+    readOptionalStringAlias(source, "notes", "notes") ??
+    readOptionalStringAlias(source, "note", "note");
   if (remarks !== undefined) patch.remarks = remarks;
 
   return Object.keys(patch).length > 0 ? patch : null;

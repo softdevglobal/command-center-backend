@@ -9,6 +9,7 @@ import systemAuditLogsRoutes from "./supabase/system-audit-logs.routes.js";
 import callsRoutes from "./supabase/calls.routes.js";
 import dashboardMetricsRoutes from "./supabase/dashboard-metrics.routes.js";
 import agentChatRoutes from "./supabase/agent-chat.routes.js";
+import smsRoutes from "./sms.routes.js";
 import agentAttendanceRoutes from "./supabase/agent-attendance.routes.js";
 import agentLeaveRequestsRoutes from "./supabase/agent-leave-requests.routes.js";
 import agentShiftSchedulesRoutes from "./supabase/agent-shift-schedules.routes.js";
@@ -168,6 +169,20 @@ router.get("/", (_req, res) => {
         "Send message — body { content, selfAgentId? }; must be a conversation participant",
       "POST /api/agent-chat/conversations/:id/read":
         "Mark peer messages read — body optional { selfAgentId }; returns { marked }",
+      "POST /api/sms/textbee-webhook":
+        "TextBee inbound SMS webhook — x-textbee-secret/x-webhook-secret or ?secret=TEXTBEE_WEBHOOK_SECRET.",
+      "GET /api/sms/inbox":
+        "SMS queues and active/non-resolved threads — super admin or agent Bearer.",
+      "GET /api/sms/threads/:threadId/messages":
+        "SMS thread messages ordered oldest first — super admin or agent Bearer.",
+      "POST /api/sms/threads/start":
+        "Start/reopen SMS thread and send outbound TextBee SMS — body { customerPhone, messageBody, queueId? }.",
+      "POST /api/sms/threads/:threadId/claim":
+        "Claim SMS thread for current authenticated agent/admin.",
+      "POST /api/sms/threads/:threadId/messages":
+        "Send outbound TextBee SMS on a claimed thread — body { messageBody }.",
+      "POST /api/sms/threads/:threadId/resolve":
+        "Resolve SMS thread and clear unread count.",
       "GET /api/agent-attendance/status":
         "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
       "GET /api/agent-attendance/reports":
@@ -254,6 +269,9 @@ router.use("/dashboard", dashboardMetricsRoutes);
 
 /** Internal agent chat — Supabase `agent_conversations` + `agent_messages`. */
 router.use("/agent-chat", agentChatRoutes);
+
+/** TextBee SMS inbox — Supabase `sms_*` tables plus websocket updates. */
+router.use("/sms", smsRoutes);
 
 /** Agent clock-in/out and breaks — Supabase `agent_attendance_events`. */
 router.use("/agent-attendance", agentAttendanceRoutes);
