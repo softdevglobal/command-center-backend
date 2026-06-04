@@ -21,7 +21,7 @@ const router = Router();
  * **Upstream Black:** stored Firebase idToken; `X-Tenant-Id` not required.
  */
 router.get("/customer-notifications", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveFirebaseBlackProxyContext(res);
+  const ctx = await resolveFirebaseBlackProxyContext(res);
   if (!ctx) return;
 
   const all = singleQuery(req.query.all);
@@ -43,7 +43,7 @@ router.post(
   "/customer-notifications/:notificationId/notification-reviewed",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const notificationId = String(req.params.notificationId ?? "").trim();
@@ -71,7 +71,7 @@ router.post(
   "/customer-notifications/:notificationId/called-customer",
   attachSupabaseUser,
   async (req, res) => {
-    const ctx = resolveFirebaseBlackProxyContext(res);
+    const ctx = await resolveFirebaseBlackProxyContext(res);
     if (!ctx) return;
 
     const notificationId = String(req.params.notificationId ?? "").trim();

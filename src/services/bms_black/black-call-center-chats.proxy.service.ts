@@ -25,6 +25,29 @@ export async function proxyBlackCallCenterChatWorkshopOwners(
 }
 
 /**
+ * GET /api/bms-black/chats?limit=&ownerUid=&tenantId=
+ * Upstream: GET https://black.bmspros.com.au/api/call-center/chats
+ *
+ * Returns the call-center 1:1 threads visible to the caller. Agents see chats where
+ * `agentUid == them` (plus any pending queue rows their workshop scope allows).
+ */
+export async function proxyBlackCallCenterChatsList(
+  firebaseIdToken: string,
+  query: { limit?: string; ownerUid?: string; tenantId?: string },
+  headerTenantId?: string
+): Promise<Response> {
+  const params = new URLSearchParams();
+  if (query.limit?.trim()) params.set("limit", query.limit.trim());
+  if (query.ownerUid?.trim()) params.set("ownerUid", query.ownerUid.trim());
+  if (query.tenantId?.trim()) params.set("tenantId", query.tenantId.trim());
+  const qs = params.toString();
+  const path = qs ? `${CALL_CENTER_CHATS}?${qs}` : CALL_CENTER_CHATS;
+  const init: RequestInit & { tenantId?: string } = { method: "GET" };
+  if (headerTenantId) init.tenantId = headerTenantId;
+  return blackCallCenterFetch(path, firebaseIdToken, init);
+}
+
+/**
  * POST /api/bms-black/chats/start-with-owner
  * Upstream: POST https://black.bmspros.com.au/api/call-center/chats/start-with-owner
  * Body: `{ "workshopOwnerUid": "...", "text": "optional first message" }`

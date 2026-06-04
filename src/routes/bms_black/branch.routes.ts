@@ -21,7 +21,7 @@ const router = Router();
  * `ownerUid` query defaults to `X-Tenant-Id` when omitted (matches frontend apiHeaders).
  */
 router.get("/branches", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const ownerUid = singleQuery(req.query.ownerUid) || ctx.tenantId;
@@ -47,7 +47,7 @@ router.get("/branches", attachSupabaseUser, async (req, res) => {
  * Headers: Authorization + X-Tenant-Id (BMS owner uid).
  */
 router.get("/branches/:branchId", attachSupabaseUser, async (req, res) => {
-  const ctx = resolveBlackTenantProxyContext(req, res);
+  const ctx = await resolveBlackTenantProxyContext(req, res);
   if (!ctx) return;
 
   const branchId = String(req.params.branchId ?? "").trim();
