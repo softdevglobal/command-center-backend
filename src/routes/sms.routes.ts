@@ -5,7 +5,15 @@ import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
 import { emitSmsUpdated } from "../realtime/sms-events.js";
 import { sessionSummaryFromLocals } from "../services/auth/supabase-auth.service.js";
 import {
+  createSmsContact,
+  deleteSmsContact,
+  getSmsContactById,
+  listSmsContacts,
+  updateSmsContact,
+} from "../services/sms-contacts.service.js";
+import {
   claimSmsThread,
+  deleteSmsThread,
   listSmsInbox,
   listSmsMessages,
   recordInboundSms,
@@ -15,6 +23,12 @@ import {
   SmsServiceError,
   startSmsThread,
 } from "../services/sms.service.js";
+import type {
+  SmsContactInput,
+  SmsContactListFilters,
+  SmsContactType,
+  SmsContactUpdateInput,
+} from "../types/sms-contact.types.js";
 import type { NormalizedTextBeeInbound } from "../types/sms.types.js";
 
 const router = Router();
@@ -144,6 +158,110 @@ function parseMessageBody(body: unknown): { messageBody: string } | { error: str
   if (!messageBody) return { error: "messageBody is required." };
 
   return { messageBody };
+}
+
+function queryString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+function queryInt(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function paramId(value: string | string[] | undefined): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value[0] ?? "";
+  return "";
+}
+
+function parseContactTypeFilter(value: unknown): SmsContactType | undefined {
+  const raw = queryString(value);
+  if (!raw) return undefined;
+  if (raw === "customer" || raw === "owner") return raw;
+  return undefined;
+}
+
+function parseContactListFilters(
+  query: Record<string, unknown>
+): SmsContactListFilters {
+  const filters: SmsContactListFilters = {};
+  const contactType =
+    parseContactTypeFilter(query.contactType) ??
+    parseContactTypeFilter(query.contact_type);
+  const phone = queryString(query.phone);
+  const ownerUid = queryString(query.ownerUid) ?? queryString(query.owner_uid);
+  const search = queryString(query.search);
+  const limit = queryInt(query.limit);
+  const offset = queryInt(query.offset);
+
+  if (contactType) filters.contactType = contactType;
+  if (phone) filters.phone = phone;
+  if (ownerUid) filters.ownerUid = ownerUid;
+  if (search) filters.search = search;
+  if (limit !== undefined) filters.limit = limit;
+  if (offset !== undefined) filters.offset = offset;
+
+  return filters;
+}
+
+function parseContactCreateBody(
+  body: unknown
+): SmsContactInput | { error: string } {
+  const record = bodyRecord(body);
+  if (!record) return { error: "Request body must be a JSON object." };
+
+  const contactType =
+    parseContactTypeFilter(record.contactType) ??
+    parseContactTypeFilter(record.contact_type);
+  const displayName =
+    valueToString(record.displayName) ?? valueToString(record.display_name);
+  const phone = valueToString(record.phone);
+  const ownerUid =
+    valueToString(record.ownerUid) ?? valueToString(record.owner_uid);
+
+  if (!contactType) {
+    return { error: "contactType is required and must be customer or owner." };
+  }
+  if (!displayName) return { error: "displayName is required." };
+  if (!phone) return { error: "phone is required." };
+
+  const parsed: SmsContactInput = { contactType, displayName, phone };
+  if (ownerUid) parsed.ownerUid = ownerUid;
+  return parsed;
+}
+
+function parseContactUpdateBody(
+  body: unknown
+): SmsContactUpdateInput | { error: string } {
+  const record = bodyRecord(body);
+  if (!record) return { error: "Request body must be a JSON object." };
+
+  const patch: SmsContactUpdateInput = {};
+  const contactType =
+    parseContactTypeFilter(record.contactType) ??
+    parseContactTypeFilter(record.contact_type);
+  const displayName =
+    valueToString(record.displayName) ?? valueToString(record.display_name);
+  const phone = valueToString(record.phone);
+  const ownerUidRaw = record.ownerUid ?? record.owner_uid;
+
+  if (contactType) patch.contactType = contactType;
+  if (displayName) patch.displayName = displayName;
+  if (phone) patch.phone = phone;
+  if (ownerUidRaw !== undefined) {
+    patch.ownerUid =
+      ownerUidRaw === null
+        ? null
+        : valueToString(ownerUidRaw);
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { error: "Provide at least one field to update." };
+  }
+
+  return patch;
 }
 
 /**
@@ -334,6 +452,147 @@ router.post("/threads/:threadId/resolve", async (req, res) => {
     res.json({ success: true, data: thread, ...authExtras(res) });
   } catch (e) {
     sendRouteError(res, e, "Failed to resolve SMS thread.");
+  }
+});
+
+router.delete("/threads/:threadId", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  try {
+    const actor = await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const result = await deleteSmsThread({
+      threadId: req.params.threadId ?? "",
+      actor,
+    });
+
+    emitSmsUpdated({ reason: "thread_deleted", threadId: result.thread.id });
+
+    res.json({ success: true, data: result, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to delete SMS thread.");
+  }
+});
+
+router.get("/contacts", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  try {
+    await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const result = await listSmsContacts(
+      parseContactListFilters(req.query as Record<string, unknown>)
+    );
+    res.json({ success: true, ...result, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to list SMS contacts.");
+  }
+});
+
+router.get("/contacts/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const id = paramId(req.params.id).trim();
+  if (!id) {
+    res.status(400).json({ success: false, error: "id is required." });
+    return;
+  }
+
+  try {
+    await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const row = await getSmsContactById(id);
+    if (!row) {
+      res.status(404).json({ success: false, error: "SMS contact not found." });
+      return;
+    }
+    res.json({ success: true, data: row, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to load SMS contact.");
+  }
+});
+
+router.post("/contacts", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const parsed = parseContactCreateBody(req.body);
+  if ("error" in parsed) {
+    res.status(400).json({ success: false, error: parsed.error });
+    return;
+  }
+
+  try {
+    const actor = await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const data = await createSmsContact({
+      ...parsed,
+      createdBy: actor.agentId,
+    });
+    res.status(201).json({ success: true, data, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to create SMS contact.");
+  }
+});
+
+router.patch("/contacts/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const id = paramId(req.params.id).trim();
+  if (!id) {
+    res.status(400).json({ success: false, error: "id is required." });
+    return;
+  }
+
+  const parsed = parseContactUpdateBody(req.body);
+  if ("error" in parsed) {
+    res.status(400).json({ success: false, error: parsed.error });
+    return;
+  }
+
+  try {
+    await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const data = await updateSmsContact(id, parsed);
+    res.json({ success: true, data, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to update SMS contact.");
+  }
+});
+
+router.delete("/contacts/:id", async (req, res) => {
+  const auth = res.locals.supabaseAuth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const id = paramId(req.params.id).trim();
+  if (!id) {
+    res.status(400).json({ success: false, error: "id is required." });
+    return;
+  }
+
+  try {
+    await resolveSmsActor({ user: auth.user, roles: auth.roles });
+    const data = await deleteSmsContact(id);
+    res.json({ success: true, data, ...authExtras(res) });
+  } catch (e) {
+    sendRouteError(res, e, "Failed to delete SMS contact.");
   }
 });
 

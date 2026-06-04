@@ -651,3 +651,43 @@ export async function resolveSmsThread(input: {
     resolved_at: new Date().toISOString(),
   });
 }
+
+export async function deleteSmsThread(input: {
+  threadId: string;
+  actor: SmsActor;
+}): Promise<{ thread: SmsThreadRow; deletedMessageCount: number }> {
+  const threadId = cleanRequired(input.threadId, "threadId");
+  const supabase = adminClient();
+  const thread = await getThreadById(supabase, threadId);
+  if (!thread) throw new SmsServiceError(404, "SMS thread not found.");
+
+  if (!input.actor.isSuperAdmin) {
+    throw new SmsServiceError(403, "Only super admins may delete SMS threads.");
+  }
+
+  const { count, error: countError } = await supabase
+    .from("sms_messages")
+    .select("*", { count: "exact", head: true })
+    .eq("thread_id", threadId);
+
+  if (countError) throwSupabaseError(countError);
+
+  const { error: messagesError } = await supabase
+    .from("sms_messages")
+    .delete()
+    .eq("thread_id", threadId);
+
+  if (messagesError) throwSupabaseError(messagesError);
+
+  const { error: threadError } = await supabase
+    .from("sms_threads")
+    .delete()
+    .eq("id", threadId);
+
+  if (threadError) throwSupabaseError(threadError);
+
+  return {
+    thread,
+    deletedMessageCount: count ?? 0,
+  };
+}

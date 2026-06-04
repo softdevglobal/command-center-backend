@@ -7,7 +7,8 @@ export type SmsUpdatedPayload = {
     | "thread_started"
     | "thread_claimed"
     | "message_sent"
-    | "thread_resolved";
+    | "thread_resolved"
+    | "thread_deleted";
   threadId?: string;
   messageId?: string;
 };

@@ -183,6 +183,16 @@ router.get("/", (_req, res) => {
         "Send outbound TextBee SMS on a claimed thread — body { messageBody }.",
       "POST /api/sms/threads/:threadId/resolve":
         "Resolve SMS thread and clear unread count.",
+      "DELETE /api/sms/threads/:threadId":
+        "Permanently delete SMS thread and its messages — super admin only.",
+      "GET /api/sms/contacts":
+        "List SMS contacts — super admin or agent Bearer; filters: contactType, phone, ownerUid, search, limit, offset.",
+      "GET /api/sms/contacts/:id": "Get one SMS contact by UUID.",
+      "POST /api/sms/contacts":
+        "Create SMS contact — body { contactType: customer|owner, displayName, phone, ownerUid? }.",
+      "PATCH /api/sms/contacts/:id":
+        "Update SMS contact — body may include contactType, displayName, phone, ownerUid.",
+      "DELETE /api/sms/contacts/:id": "Delete SMS contact by UUID.",
       "GET /api/agent-attendance/status":
         "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
       "GET /api/agent-attendance/reports":
