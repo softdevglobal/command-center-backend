@@ -21,6 +21,7 @@ import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
+import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -144,6 +145,10 @@ router.get("/", (_req, res) => {
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
+      "GET /api/inspection-requests":
+        "List inspection requests from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "GET /api/inspection-requests/:id":
+        "Get one inspection request by id — Supabase Bearer",
       "GET /api/dashboard/metrics":
         "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus, slaSeconds",
       "GET /api/dashboard/online-agents-count":
@@ -183,6 +188,16 @@ router.get("/", (_req, res) => {
         "Send outbound TextBee SMS on a claimed thread — body { messageBody }.",
       "POST /api/sms/threads/:threadId/resolve":
         "Resolve SMS thread and clear unread count.",
+      "DELETE /api/sms/threads/:threadId":
+        "Permanently delete SMS thread and its messages — super admin only.",
+      "GET /api/sms/contacts":
+        "List SMS contacts — super admin or agent Bearer; filters: contactType, phone, ownerUid, search, limit, offset.",
+      "GET /api/sms/contacts/:id": "Get one SMS contact by UUID.",
+      "POST /api/sms/contacts":
+        "Create SMS contact — body { contactType: customer|owner, displayName, phone, ownerUid? }.",
+      "PATCH /api/sms/contacts/:id":
+        "Update SMS contact — body may include contactType, displayName, phone, ownerUid.",
+      "DELETE /api/sms/contacts/:id": "Delete SMS contact by UUID.",
       "GET /api/agent-attendance/status":
         "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
       "GET /api/agent-attendance/reports":
@@ -263,6 +278,9 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
+
+/** Inspection requests — Firestore `inspection_requests` on bmspro-trade (Firebase Blue). */
+router.use("/inspection-requests", inspectionRequestsRoutes);
 
 /** Dashboard call-center KPIs — Supabase `agents` + `calls`. */
 router.use("/dashboard", dashboardMetricsRoutes);
