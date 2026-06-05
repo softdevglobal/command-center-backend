@@ -51,7 +51,9 @@ router.get("/", (_req, res) => {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
       "POST /api/auth/login":
-        "Sign in — Supabase session; optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
+        "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
+      "POST /api/auth/refresh":
+        "Refresh Supabase access_token — body { refresh_token } from login; same 4h sessionValidUntil window.",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",

@@ -3,6 +3,7 @@ import { Router } from "express";
 import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
 import {
   loginWithSupabasePassword,
+  refreshSupabaseAuthSession,
   sessionSummaryFromLocals,
 } from "../services/auth/supabase-auth.service.js";
 import { createSystemAuditLog } from "../services/system-audit-logs.service.js";
@@ -30,8 +31,10 @@ function loginUserName(input: {
  *
  * Works for **super admins** and **agents** (any Supabase user with credentials).
  * Response includes access_token — send as Authorization: Bearer for protected routes.
- *
- * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Google Identity Toolkit
+ * Sessions last **4 hours** (`AUTH_SESSION_HOURS`): Supabase access_token and Firebase
+ * Black/Pink idTokens are auto-refreshed on each API call. Login JSON includes
+ * `sessionValidUntil` / `sessionValidHours`. Optional: POST /api/auth/refresh with
+ * `refresh_token`, or read `X-Supabase-Access-Token` from API responses when rotated.
  * `accounts:signInWithPassword` for bmspro-black (same email/password).
  * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink (`firebasePinkIdentityToolkit`).
  * After each successful login the **server terminal** prints a bordered
@@ -82,6 +85,30 @@ router.post("/login", async (req, res) => {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[audit] Failed to write auth.login audit log: ${msg}`);
+  }
+
+  res.json(result.body);
+});
+
+/**
+ * POST /api/auth/refresh
+ * Body: { refresh_token }
+ *
+ * Returns a new Supabase access_token (and refresh_token). Use when the JWT expires
+ * before `sessionValidUntil` (~4h). The server also auto-refreshes on each protected
+ * API call and may return `X-Supabase-Access-Token` on the response.
+ */
+router.post("/refresh", async (req, res) => {
+  const body = req.body as { refresh_token?: string };
+  if (!body?.refresh_token?.trim()) {
+    res.status(400).json({ error: "refresh_token is required" });
+    return;
+  }
+
+  const result = await refreshSupabaseAuthSession(body.refresh_token);
+  if (!result.ok) {
+    res.status(401).json({ error: result.message });
+    return;
   }
 
   res.json(result.body);

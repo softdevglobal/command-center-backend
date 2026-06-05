@@ -11,7 +11,7 @@ export function createSupabaseClient(url: string, key: string): SupabaseClient {
     realtime: {
       transport: ws,
     },
-  } as SupabaseClientOptions<"public">);
+  } as unknown as SupabaseClientOptions<"public">);
 }
 
 let cached: SupabaseClient | null | undefined;

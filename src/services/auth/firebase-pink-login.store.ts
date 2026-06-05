@@ -9,6 +9,10 @@
  */
 
 import { refreshIdTokenWithRefreshToken } from "./firebase-identity-toolkit-refresh.service.js";
+import {
+  firebaseStoredSessionValidUntil,
+  getFirebaseStoredSessionHours,
+} from "./firebase-stored-session.config.js";
 
 /** One cached Firebase Pink session for a single Supabase Auth user. */
 export type FirebasePinkIdentityForUser = {
@@ -18,6 +22,8 @@ export type FirebasePinkIdentityForUser = {
   refreshToken?: string | undefined;
   /** Epoch ms when the cached idToken expires (Identity Toolkit `expiresIn`). */
   expiresAt?: number | undefined;
+  /** Epoch ms — stop auto-refresh and drop row after this (default 4h from login). */
+  sessionValidUntil: number;
   /** ISO timestamp when this row was last written (login or refresh). */
   storedAt: string;
   /** Optional email copy for troubleshooting (not used for lookup). */
@@ -56,6 +62,7 @@ export function rememberFirebasePinkIdentityForUser(entry: {
   const row: FirebasePinkIdentityForUser = {
     idToken: idToken.trim(),
     storedAt: new Date().toISOString(),
+    sessionValidUntil: firebaseStoredSessionValidUntil(),
   };
   const trimmedRefresh = refreshToken?.trim();
   if (trimmedRefresh) row.refreshToken = trimmedRefresh;
@@ -96,6 +103,7 @@ async function refreshRow(
   const next: FirebasePinkIdentityForUser = {
     idToken,
     storedAt: new Date().toISOString(),
+    sessionValidUntil: row.sessionValidUntil,
   };
   const newRefresh = result.data.refresh_token?.trim() ?? row.refreshToken;
   if (newRefresh) next.refreshToken = newRefresh;
@@ -111,12 +119,16 @@ function rowIsExpiring(row: FirebasePinkIdentityForUser): boolean {
   return row.expiresAt - REFRESH_SKEW_MS <= Date.now();
 }
 
+function rowSessionExpired(row: FirebasePinkIdentityForUser): boolean {
+  return row.sessionValidUntil <= Date.now();
+}
+
 /**
  * Resolve the Firebase Pink idToken for the current Supabase user, refreshing it
- * via the Secure Token API when within `REFRESH_SKEW_MS` of expiry.
+ * via the Secure Token API when within `REFRESH_SKEW_MS` of expiry (for up to
+ * **4 hours** after login — `FIREBASE_STORED_SESSION_HOURS`).
  *
- * Returns `null` when not stored (never logged in with Pink key set, or server
- * restarted) or when a refresh attempt failed.
+ * Returns `null` when not stored, when the 4-hour window elapsed, or when refresh failed.
  */
 export async function getFirebasePinkIdTokenForSupabaseUser(
   supabaseUserId: string
@@ -125,6 +137,14 @@ export async function getFirebasePinkIdTokenForSupabaseUser(
   if (!key) return null;
   const row = bySupabaseUserId.get(key);
   if (!row) return null;
+
+  if (rowSessionExpired(row)) {
+    bySupabaseUserId.delete(key);
+    console.warn(
+      `[firebase-pink-login.store] Session expired after ${getFirebaseStoredSessionHours()}h for ${key} — login again.`
+    );
+    return null;
+  }
 
   if (!rowIsExpiring(row)) return row.idToken;
 
