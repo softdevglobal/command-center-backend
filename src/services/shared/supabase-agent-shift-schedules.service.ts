@@ -56,6 +56,10 @@ function emptyDayValues(): AgentShiftScheduleFullDayValues {
   };
 }
 
+function queueIdColumn(day: (typeof AGENT_SHIFT_SCHEDULE_WEEKDAYS)[number]) {
+  return `${day}_queue_id` as const;
+}
+
 function dayValuesFromRow(
   row: AgentShiftScheduleRow | null
 ): AgentShiftScheduleFullDayValues {
@@ -64,6 +68,18 @@ function dayValuesFromRow(
 
   for (const day of AGENT_SHIFT_SCHEDULE_WEEKDAYS) {
     values[day] = normalizeDayValue(row[day]);
+  }
+  return values;
+}
+
+function queueIdValuesFromRow(
+  row: AgentShiftScheduleRow | null
+): AgentShiftScheduleFullDayValues {
+  const values = emptyDayValues();
+  if (!row) return values;
+
+  for (const day of AGENT_SHIFT_SCHEDULE_WEEKDAYS) {
+    values[day] = normalizeDayValue(row[queueIdColumn(day)]);
   }
   return values;
 }
@@ -132,10 +148,17 @@ export async function upsertAgentShiftScheduleInSupabase(input: {
     agentId,
   });
   const merged = dayValuesFromRow(existing);
+  const mergedQueueIds = queueIdValuesFromRow(existing);
 
   for (const day of AGENT_SHIFT_SCHEDULE_WEEKDAYS) {
     if (Object.prototype.hasOwnProperty.call(input.row.days, day)) {
       merged[day] = normalizeDayValue(input.row.days[day]);
+    }
+    if (
+      input.row.queueIds &&
+      Object.prototype.hasOwnProperty.call(input.row.queueIds, day)
+    ) {
+      mergedQueueIds[day] = normalizeDayValue(input.row.queueIds[day]);
     }
   }
 
@@ -144,6 +167,9 @@ export async function upsertAgentShiftScheduleInSupabase(input: {
     agent_id: agentId,
     ...merged,
   };
+  for (const day of AGENT_SHIFT_SCHEDULE_WEEKDAYS) {
+    upsertRow[queueIdColumn(day)] = mergedQueueIds[day];
+  }
 
   const { data, error } = await supabase
     .from("agent_shift_schedules")

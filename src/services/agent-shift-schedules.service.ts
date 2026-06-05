@@ -20,8 +20,13 @@ export function validateAgentShiftScheduleUpsertInput(
   const hasAnyDay = AGENT_SHIFT_SCHEDULE_WEEKDAYS.some((day) =>
     Object.prototype.hasOwnProperty.call(input.days, day)
   );
-  if (!hasAnyDay) {
-    return "At least one weekday shift value is required.";
+  const hasAnyQueueId = AGENT_SHIFT_SCHEDULE_WEEKDAYS.some(
+    (day) =>
+      input.queueIds &&
+      Object.prototype.hasOwnProperty.call(input.queueIds, day)
+  );
+  if (!hasAnyDay && !hasAnyQueueId) {
+    return "At least one weekday shift value or queue id is required.";
   }
 
   return null;

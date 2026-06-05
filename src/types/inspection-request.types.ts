@@ -8,6 +8,8 @@ export type InspectionRequestListOptions = {
   offset?: number;
 };
 
+export type InspectionRequestCreateInput = Record<string, unknown>;
+
 export type InspectionRequestListResult = {
   data: InspectionRequestRecord[];
   total: number;

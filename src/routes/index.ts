@@ -147,6 +147,8 @@ router.get("/", (_req, res) => {
       "GET /api/calls/:id": "Get one call — same access rules as list",
       "GET /api/inspection-requests":
         "List inspection requests from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/inspection-requests":
+        "Create inspection request in Firestore inspection_requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
       "GET /api/inspection-requests/:id":
         "Get one inspection request by id — Supabase Bearer",
       "GET /api/dashboard/metrics":
@@ -224,7 +226,7 @@ router.get("/", (_req, res) => {
       "GET /api/agent-shift-schedules/:agentId":
         "Get one shift schedule by agents.id — agent: own only; super admin: any",
       "PUT /api/agent-shift-schedules/:agentId":
-        "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
+        "Create/update a shift schedule — super admin only; body accepts weekday text/null fields plus per-day queue ids, e.g. { monday?, mondayQueueId? } or { monday_queue_id? }",
       "GET /api/sales-suburb-workshops":
         "List workshop suburbs — super admin: all; agent: assigned suburbs only. Filters: tenantId, suburb, search, limit, offset",
       "POST /api/sales-suburb-workshops":

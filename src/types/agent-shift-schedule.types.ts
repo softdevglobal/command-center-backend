@@ -20,13 +20,19 @@ export type AgentShiftScheduleFullDayValues = Record<
   string | null
 >;
 
+export type AgentShiftScheduleQueueIdValues = Record<
+  `${AgentShiftScheduleWeekday}_queue_id`,
+  string | null
+>;
+
 /** Row shape for `public.agent_shift_schedules`. */
-export type AgentShiftScheduleRow = AgentShiftScheduleFullDayValues & {
-  id: string;
-  agent_id: string;
-  created_at: string;
-  updated_at: string;
-};
+export type AgentShiftScheduleRow = AgentShiftScheduleFullDayValues &
+  AgentShiftScheduleQueueIdValues & {
+    id: string;
+    agent_id: string;
+    created_at: string;
+    updated_at: string;
+  };
 
 export type AgentShiftScheduleListFilters = {
   agentId?: string;
@@ -46,6 +52,7 @@ export type AgentShiftScheduleListResult = {
 export type AgentShiftScheduleUpsertInput = {
   agentId: string;
   days: AgentShiftScheduleDayValues;
+  queueIds?: AgentShiftScheduleDayValues;
 };
 
 export type AgentShiftScheduleUpsertResult = {

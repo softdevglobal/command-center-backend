@@ -14,6 +14,8 @@ import {
   AGENT_SHIFT_SCHEDULE_WEEKDAYS,
   type AgentShiftScheduleDayValues,
   type AgentShiftScheduleListFilters,
+  type AgentShiftScheduleUpsertInput,
+  type AgentShiftScheduleWeekday,
 } from "../../types/agent-shift-schedule.types.js";
 
 const router = Router();
@@ -88,36 +90,79 @@ function authExtras(res: import("express").Response) {
   };
 }
 
-type ParsedScheduleDays =
-  | { ok: true; value: AgentShiftScheduleDayValues }
+type ParsedScheduleBody =
+  | {
+      ok: true;
+      value: Pick<AgentShiftScheduleUpsertInput, "days" | "queueIds">;
+    }
   | { ok: false; error: string };
 
-function parseScheduleDaysBody(body: unknown): ParsedScheduleDays {
+function hasOwn(source: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
+function queueIdBodyKeys(day: AgentShiftScheduleWeekday): [string, string] {
+  return [`${day}QueueId`, `${day}_queue_id`];
+}
+
+function parseNullableTextField(
+  value: unknown,
+  fieldName: string
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: `${fieldName} must be a string value or null.`,
+    };
+  }
+  return { ok: true, value: value.trim() || null };
+}
+
+function parseScheduleBody(body: unknown): ParsedScheduleBody {
   if (!body || typeof body !== "object") {
     return { ok: false, error: "Request body must be a JSON object." };
   }
 
   const source = body as Record<string, unknown>;
   const days: AgentShiftScheduleDayValues = {};
+  const queueIds: AgentShiftScheduleDayValues = {};
 
   for (const day of AGENT_SHIFT_SCHEDULE_WEEKDAYS) {
-    if (!Object.prototype.hasOwnProperty.call(source, day)) continue;
+    if (hasOwn(source, day)) {
+      const parsedDay = parseNullableTextField(source[day], day);
+      if (!parsedDay.ok) {
+        return {
+          ok: false,
+          error: `${day} must be a string shift value or null.`,
+        };
+      }
+      days[day] = parsedDay.value;
+    }
 
-    const value = source[day];
-    if (value === null) {
-      days[day] = null;
-      continue;
+    const [camelQueueIdKey, snakeQueueIdKey] = queueIdBodyKeys(day);
+    const queueIdKey = hasOwn(source, camelQueueIdKey)
+      ? camelQueueIdKey
+      : hasOwn(source, snakeQueueIdKey)
+        ? snakeQueueIdKey
+        : null;
+    if (queueIdKey) {
+      const parsedQueueId = parseNullableTextField(
+        source[queueIdKey],
+        queueIdKey
+      );
+      if (!parsedQueueId.ok) return parsedQueueId;
+      queueIds[day] = parsedQueueId.value;
     }
-    if (typeof value !== "string") {
-      return {
-        ok: false,
-        error: `${day} must be a string shift value or null.`,
-      };
-    }
-    days[day] = value.trim() || null;
   }
 
-  return { ok: true, value: days };
+  return {
+    ok: true,
+    value: {
+      days,
+      ...(Object.keys(queueIds).length > 0 ? { queueIds } : {}),
+    },
+  };
 }
 
 async function resolveAgentIdFromQuery(input: {
@@ -326,7 +371,8 @@ router.get("/:agentId", async (req, res) => {
 
 /**
  * PUT /api/agent-shift-schedules/:agentId
- * Super admin only. Body accepts any weekday keys: { monday, ..., sunday }.
+ * Super admin only. Body accepts any weekday shift keys and queue ids:
+ * { monday, mondayQueueId } or { monday, monday_queue_id }.
  */
 router.put("/:agentId", async (req, res) => {
   const auth = res.locals.supabaseAuth;
@@ -354,7 +400,7 @@ router.put("/:agentId", async (req, res) => {
     return;
   }
 
-  const parsed = parseScheduleDaysBody(req.body);
+  const parsed = parseScheduleBody(req.body);
   if (!parsed.ok) {
     res.status(400).json({ success: false, error: parsed.error });
     return;
@@ -363,7 +409,8 @@ router.put("/:agentId", async (req, res) => {
   try {
     const result = await upsertAgentShiftSchedule({
       agentId,
-      days: parsed.value,
+      days: parsed.value.days,
+      ...(parsed.value.queueIds ? { queueIds: parsed.value.queueIds } : {}),
     });
     res.status(result.created ? 201 : 200).json({
       success: true,
