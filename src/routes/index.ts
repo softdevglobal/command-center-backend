@@ -22,6 +22,8 @@ import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.rou
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
 import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
+import businessRoutes from "./firebase/business.routes.js";
+import invoicesRoutes from "./firebase/invoices.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -151,6 +153,14 @@ router.get("/", (_req, res) => {
         "Create inspection request in Firestore inspection_requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
       "GET /api/inspection-requests/:id":
         "Get one inspection request by id — Supabase Bearer",
+      "GET /api/businesses":
+        "List registered businesses from Firestore businesses (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "GET /api/businesses/:id":
+        "Get one registered business by id from Firestore businesses (bmspro-trade) — Supabase Bearer",
+      "GET /api/invoices":
+        "List invoices from Firestore invoices (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "GET /api/invoices/:id":
+        "Get one invoice by id from Firestore invoices (bmspro-trade) — Supabase Bearer",
       "GET /api/dashboard/metrics":
         "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus, slaSeconds",
       "GET /api/dashboard/online-agents-count":
@@ -283,6 +293,12 @@ router.use("/calls", callsRoutes);
 
 /** Inspection requests — Firestore `inspection_requests` on bmspro-trade (Firebase Blue). */
 router.use("/inspection-requests", inspectionRequestsRoutes);
+
+/** Registered businesses — Firestore `businesses` on bmspro-trade (Firebase Blue). */
+router.use("/businesses", businessRoutes);
+
+/** Invoices — Firestore `invoices` on bmspro-trade (Firebase Blue). */
+router.use("/invoices", invoicesRoutes);
 
 /** Dashboard call-center KPIs — Supabase `agents` + `calls`. */
 router.use("/dashboard", dashboardMetricsRoutes);
