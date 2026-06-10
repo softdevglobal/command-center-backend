@@ -151,6 +151,10 @@ router.get("/", (_req, res) => {
         "List inspection requests from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
       "POST /api/inspection-requests":
         "Create inspection request in Firestore inspection_requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
+      "GET /api/inspection-requests/businesses/:businessId":
+        "List inspection requests for one business from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/inspection-requests/businesses/:businessId":
+        "Create inspection request for one business id — Supabase Bearer; businessId comes from URL and must match body.businessId if provided.",
       "GET /api/inspection-requests/:id":
         "Get one inspection request by id — Supabase Bearer",
       "GET /api/businesses":

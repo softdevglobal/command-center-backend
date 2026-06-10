@@ -5,6 +5,7 @@ import { sessionSummaryFromLocals } from "../../services/auth/supabase-auth.serv
 import {
   createInspectionRequest,
   getInspectionRequestById,
+  listInspectionRequestsByBusinessId,
   listInspectionRequests,
 } from "../../services/inspection-requests.service.js";
 import type { InspectionRequestCreateInput } from "../../types/inspection-request.types.js";
@@ -108,6 +109,109 @@ router.post("/", async (req, res) => {
     );
     res.status(201).json({
       success: true,
+      data,
+      ...authExtras(res),
+    });
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "Failed to create inspection request";
+    res.status(errorStatus(e, 400)).json({ success: false, error: msg });
+  }
+});
+
+/**
+ * GET /api/inspection-requests/businesses/:businessId
+ * Inspection requests for one business id from Firestore `inspection_requests`.
+ * Optional ?limit=&offset=
+ */
+router.get("/businesses/:businessId", async (req, res) => {
+  if (!res.locals.supabaseAuth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const businessId = paramId(req.params.businessId);
+  if (!businessId) {
+    res.status(400).json({ success: false, error: "Business id is required." });
+    return;
+  }
+
+  const limit = queryInt(req.query.limit);
+  const offset = queryInt(req.query.offset);
+  const options: { limit?: number; offset?: number } = {};
+  if (limit !== undefined) options.limit = limit;
+  if (offset !== undefined) options.offset = offset;
+
+  try {
+    const result = await listInspectionRequestsByBusinessId(
+      businessId,
+      options
+    );
+    res.json({
+      success: true,
+      businessId,
+      ...result,
+      ...authExtras(res),
+    });
+  } catch (e) {
+    const msg =
+      e instanceof Error
+        ? e.message
+        : "Failed to list business inspection requests";
+    res.status(errorStatus(e, 500)).json({ success: false, error: msg });
+  }
+});
+
+/**
+ * POST /api/inspection-requests/businesses/:businessId
+ * Create a Firestore `inspection_requests` document for one business id.
+ */
+router.post("/businesses/:businessId", async (req, res) => {
+  if (!res.locals.supabaseAuth) {
+    res.status(401).json({ success: false, error: "Unauthorized." });
+    return;
+  }
+
+  const businessId = paramId(req.params.businessId);
+  if (!businessId) {
+    res.status(400).json({ success: false, error: "Business id is required." });
+    return;
+  }
+
+  if (!isRecord(req.body)) {
+    res.status(400).json({ success: false, error: "JSON object body is required." });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(body, "id")) {
+    res.status(400).json({
+      success: false,
+      error: "id is generated automatically. Do not send id.",
+    });
+    return;
+  }
+
+  if (
+    body.businessId !== undefined &&
+    body.businessId !== null &&
+    (typeof body.businessId !== "string" || body.businessId.trim() !== businessId)
+  ) {
+    res.status(400).json({
+      success: false,
+      error: "businessId in body must match the URL business id.",
+    });
+    return;
+  }
+
+  try {
+    const data = await createInspectionRequest({
+      ...body,
+      businessId,
+    } as InspectionRequestCreateInput);
+    res.status(201).json({
+      success: true,
+      businessId,
       data,
       ...authExtras(res),
     });

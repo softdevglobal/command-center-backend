@@ -255,6 +255,36 @@ export async function listInspectionRequestsInFirestore(
   };
 }
 
+export async function listInspectionRequestsByBusinessIdInFirestore(
+  businessId: string,
+  options: InspectionRequestListOptions = {}
+): Promise<InspectionRequestListResult> {
+  const key = businessId.trim();
+  if (!key) {
+    throw statusError("Business id is required.");
+  }
+
+  const db = tradeFirestore();
+  const { limit, offset } = normalizePagination(options);
+  const base = db.collection(COLLECTION).where("businessId", "==", key);
+
+  let listQuery = base.orderBy(ORDER_FIELD, "desc");
+  if (offset > 0) listQuery = listQuery.offset(offset);
+  listQuery = listQuery.limit(limit);
+
+  const [snapshot, countSnap] = await Promise.all([
+    listQuery.get(),
+    base.count().get(),
+  ]);
+
+  return {
+    data: snapshot.docs.map((d) => docToRecord(d.id, d.data())),
+    total: countSnap.data().count,
+    limit,
+    offset,
+  };
+}
+
 export async function createInspectionRequestInFirestore(
   input: InspectionRequestCreateInput
 ): Promise<InspectionRequestRecord> {
