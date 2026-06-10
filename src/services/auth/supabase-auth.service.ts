@@ -9,6 +9,11 @@ import { signInFirebaseBlackWithPassword } from "./firebase-black-login.service.
 import { rememberFirebaseBlackIdentityForUser } from "./firebase-black-login.store.js";
 import { signInFirebasePinkWithPassword } from "./firebase-pink-login.service.js";
 import { rememberFirebasePinkIdentityForUser } from "./firebase-pink-login.store.js";
+import { authSessionTokenExpiryForResponse } from "./firebase-stored-session.config.js";
+import {
+  rememberSupabaseSessionForUser,
+  refreshSupabaseSessionWithRefreshToken,
+} from "./supabase-session.store.js";
 
 export type LoginInput = {
   email: string;
@@ -25,6 +30,10 @@ export type FirebaseIdentityToolkitLogin =
       email?: string | undefined;
       displayName?: string | undefined;
       registered?: boolean | undefined;
+      /** Unix seconds — server keeps refreshing Firebase idToken until this time (default 4h). */
+      sessionValidUntil?: number | undefined;
+      /** Same as `AUTH_SESSION_HOURS` / `FIREBASE_STORED_SESSION_HOURS` (default 4). */
+      sessionValidHours?: number | undefined;
     }
   | { ok: false; error: string };
 
@@ -32,7 +41,7 @@ export type LoginSuccess = {
   access_token: string;
   refresh_token: string;
   expires_in: number;
-  expires_at?: number;
+  expires_at: number;
   token_type: string;
   user: {
     id: string;
@@ -51,6 +60,13 @@ export type LoginSuccess = {
    * (`firebase-pink-login.store.ts`) — not returned in this JSON.
    */
   firebasePinkIdentityToolkit?: FirebaseIdentityToolkitLogin;
+  /**
+   * Unix seconds — Supabase + Firebase sessions stay valid until this time (default 4h).
+   * Server auto-refreshes Supabase access_token and Firebase idTokens on each API call.
+   */
+  sessionValidUntil: number;
+  /** Same as `AUTH_SESSION_HOURS` (default 4). */
+  sessionValidHours: number;
 };
 
 function displayNameFromUser(meta: Record<string, unknown> | undefined): string {
@@ -143,18 +159,30 @@ export async function loginWithSupabasePassword(
     userOut.user_metadata = meta;
   }
 
+  const sessionExpiry = authSessionTokenExpiryForResponse();
+
   const body: LoginSuccess = {
     access_token: data.session.access_token,
     refresh_token: data.session.refresh_token,
-    expires_in: data.session.expires_in,
+    expires_in: sessionExpiry.expires_in,
+    expires_at: sessionExpiry.expires_at,
     token_type: data.session.token_type,
     user: userOut,
     roles,
     agentType: agentTypeFromUser(meta),
+    sessionValidUntil: sessionExpiry.sessionValidUntil,
+    sessionValidHours: sessionExpiry.sessionValidHours,
   };
-  if (data.session.expires_at !== undefined) {
-    body.expires_at = data.session.expires_at;
-  }
+
+  rememberSupabaseSessionForUser({
+    supabaseUserId: data.user.id,
+    refreshToken: data.session.refresh_token,
+    expiresAt: data.session.expires_at,
+    expiresIn: data.session.expires_in,
+  });
+
+  const firebaseSessionValidUntilSec = sessionExpiry.sessionValidUntil;
+  const firebaseSessionValidHours = sessionExpiry.sessionValidHours;
 
   const firebaseWebApiKey = (
     process.env.FIREBASE_BLACK_WEB_API_KEY ?? ""
@@ -196,6 +224,8 @@ export async function loginWithSupabasePassword(
           email: d.email,
           displayName: d.displayName,
           registered: d.registered,
+          sessionValidUntil: firebaseSessionValidUntilSec,
+          sessionValidHours: firebaseSessionValidHours,
         };
       } else {
         body.firebaseBlackIdentityToolkit = {
@@ -254,6 +284,8 @@ export async function loginWithSupabasePassword(
           email: pd.email,
           displayName: pd.displayName,
           registered: pd.registered,
+          sessionValidUntil: firebaseSessionValidUntilSec,
+          sessionValidHours: firebaseSessionValidHours,
         };
       } else {
         body.firebasePinkIdentityToolkit = {
@@ -330,6 +362,43 @@ export async function loginWithSupabasePassword(
   }
   logBmsLoginTerminalBanner(bannerLines);
 
+  return { ok: true, body };
+}
+
+export type RefreshSuccess = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  expires_at: number;
+  token_type: string;
+  sessionValidUntil: number;
+  sessionValidHours: number;
+};
+
+/** Refresh Supabase session; updates server-side store for auto-refresh on API calls. */
+export async function refreshSupabaseAuthSession(
+  refreshToken: string
+): Promise<
+  | { ok: true; body: RefreshSuccess }
+  | { ok: false; message: string }
+> {
+  const result = await refreshSupabaseSessionWithRefreshToken(refreshToken);
+  if (!result.ok) {
+    return { ok: false, message: result.message };
+  }
+
+  const sessionExpiry = authSessionTokenExpiryForResponse(
+    result.sessionValidUntil
+  );
+  const body: RefreshSuccess = {
+    access_token: result.accessToken,
+    refresh_token: result.refreshToken,
+    expires_in: sessionExpiry.expires_in,
+    expires_at: sessionExpiry.expires_at,
+    token_type: result.tokenType,
+    sessionValidUntil: sessionExpiry.sessionValidUntil,
+    sessionValidHours: sessionExpiry.sessionValidHours,
+  };
   return { ok: true, body };
 }
 
