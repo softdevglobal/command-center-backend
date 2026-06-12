@@ -32,14 +32,18 @@ function loginUserName(input: {
  * Works for **super admins** and **agents** (any Supabase user with credentials).
  * Response includes access_token — send as Authorization: Bearer for protected routes.
  * Sessions last **4 hours** (`AUTH_SESSION_HOURS`): Supabase access_token and Firebase
- * Black/Pink idTokens are auto-refreshed on each API call. Login JSON includes
+ * Black/Pink/Blue idTokens are auto-refreshed on each API call. Login JSON includes
  * `sessionValidUntil` / `sessionValidHours`. Optional: POST /api/auth/refresh with
  * `refresh_token`, or read `X-Supabase-Access-Token` from API responses when rotated.
- * `accounts:signInWithPassword` for bmspro-black (same email/password).
- * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink (`firebasePinkIdentityToolkit`).
+ *
+ * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Identity Toolkit for bmspro-black.
+ * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink.
+ * If `FIREBASE_BLUE_WEB_API_KEY` is set, same for bmspro-trade (`firebaseBlueIdentityToolkit`).
+ *
  * After each successful login the **server terminal** prints a bordered
- * `[BMS LOGIN]` summary (Supabase + Firebase SUCCESS / FAILED / SKIPPED).
- * The JSON body may include `firebaseBlackIdentityToolkit` and `firebasePinkIdentityToolkit`.
+ * `[BMS LOGIN]` summary (Supabase + Firebase Black/Pink/Blue SUCCESS / FAILED / SKIPPED).
+ * The JSON body may include `firebaseBlackIdentityToolkit`, `firebasePinkIdentityToolkit`,
+ * and `firebaseBlueIdentityToolkit`.
  */
 router.post("/login", async (req, res) => {
   const body = req.body as { email?: string; password?: string };
@@ -78,6 +82,10 @@ router.post("/login", async (req, res) => {
             : "failed_or_skipped",
         firebasePinkIdentityToolkit:
           result.body.firebasePinkIdentityToolkit?.ok === true
+            ? "success"
+            : "failed_or_skipped",
+        firebaseBlueIdentityToolkit:
+          result.body.firebaseBlueIdentityToolkit?.ok === true
             ? "success"
             : "failed_or_skipped",
       },

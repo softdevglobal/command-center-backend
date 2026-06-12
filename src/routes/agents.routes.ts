@@ -426,18 +426,95 @@ router.delete("/:id", async (req, res) => {
 });
 
 /**
- * POST /api/agents/register
+ * Call-center agent registration — super admin only (or bootstrap secret).
  *
- * **Production:** `Authorization: Bearer <access_token>` from `POST /api/auth/login` as a user whose
- * `user_roles` allows agent registration (super admin / configured role).
+ * POST — creates the agent in **Supabase** (Auth + `user_roles` + `agents` row) and mirrors the same
+ *        email/password into **Firebase Black**, **Firebase Pink**, and **Firebase Blue** (bmspro-trade).
+ *        Firestore documents:
+ *          • Black/Pink → `call_center_agents/{firebaseUid}` (BMS admin shape)
+ *          • Blue       → `call_center_agents/{firebaseUid}` (trade shape with `supabaseUserId`, `status`, …)
  *
- * **Local / Postman (no login):** header `x-setup-secret: <SETUP_SECRET_KEY>` (same secret as
- * `POST /api/super-admin/register`). Uses Supabase service role on Command Center — does not call BMS Black HTTP.
+ * Agents are platform-wide command-centre or workshop-scoped; workshop fields are optional unless
+ * `agentType` is `workshop`.
  *
- * Body: name, email, phone, password, extension (required); notes?, agentType?, tenantId?,
- * workshopOwnerUid?, workshopBranchId?, workshopUserRole? for workshop agents.
+ * ──────────────────────────────────────────────────────────────────────────────
+ * STEP 1 — Bootstrap super admin (first time only)
+ * ──────────────────────────────────────────────────────────────────────────────
+ * POST http://127.0.0.1:5000/api/super-admin/register
+ * Headers: x-setup-secret: <SETUP_SECRET_KEY>
+ * Body: { "email", "password", "displayName" }
  *
- * Creates Supabase agent + Firebase Black + Firebase Pink (same password) where Admin SDK is configured on CC.
+ * ──────────────────────────────────────────────────────────────────────────────
+ * STEP 2 — Super admin login (get Bearer token)
+ * ──────────────────────────────────────────────────────────────────────────────
+ * POST http://127.0.0.1:5000/api/auth/login
+ * Body:
+ *   {
+ *     "email":    "superadmin@yourdomain.com",
+ *     "password": "yourSuperAdminPassword"
+ *   }
+ * Copy `access_token` — use as `Authorization: Bearer <access_token>` below.
+ *
+ * Alternative (local Postman, no login): header `x-setup-secret: <SETUP_SECRET_KEY>` on this route.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * STEP 3 — POST /api/agents/register  (create agent)
+ * ──────────────────────────────────────────────────────────────────────────────
+ * URL:     http://127.0.0.1:5000/api/agents/register
+ * Method:  POST
+ * Headers:
+ *   Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
+ *   Content-Type:  application/json
+ *   (OR x-setup-secret: <SETUP_SECRET_KEY> instead of Bearer)
+ *
+ * Request body (command-centre agent):
+ *   {
+ *     "name":       "Sarah Johnson",
+ *     "email":      "sarah.johnson@callcenter.com",
+ *     "phone":      "+61400123456",
+ *     "password":   "Agent@1234",
+ *     "extension":  "1009",
+ *     "agentType":  "command-centre",
+ *     "notes":      ""
+ *   }
+ *
+ * Workshop agent — also send:
+ *   "agentType": "workshop",
+ *   "workshopOwnerUid": "<bms-owner-uid>",
+ *   "workshopBranchId": "<branch-id>",
+ *   "workshopUserRole": "owner" | "branch_admin" | "staff"
+ *
+ * Success response — 200:
+ *   {
+ *     "success": true,
+ *     "authMode": "bearer",
+ *     "supabase": { "userId": "...", "agentId": "agent-..." },
+ *     "firebaseBlack": { "uid": "..." },
+ *     "firebasePink":  { "uid": "..." },
+ *     "firebaseBlue":  { "uid": "..." }
+ *   }
+ *
+ * Error responses:
+ *   { "error": "name, email, phone, and password are required" }             400
+ *   { "error": "extension is required — use the Yeastar extension ..." }     400
+ *   { "error": "Missing auth: send Authorization: Bearer ..." }              401
+ *   { "error": "Only super admins can register agents ..." }                   403
+ *   { "success": false, "error": "..." }                                       400
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * STEP 4 — Agent login
+ * ──────────────────────────────────────────────────────────────────────────────
+ * POST http://127.0.0.1:5000/api/auth/login
+ * Body: { "email": "sarah.johnson@callcenter.com", "password": "Agent@1234" }
+ * Use `access_token` for Command Center APIs; Firebase idTokens are stored server-side for BMS proxies.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ * GET /api/agents  — List agents (super admin)
+ * ──────────────────────────────────────────────────────────────────────────────
+ * URL:     http://127.0.0.1:5000/api/agents
+ * Method:  GET
+ * Headers: Authorization: Bearer <SUPABASE_ACCESS_TOKEN>
+ * Query:   ?agentType=all|command-centre|workshop&limit=50&offset=0
  */
 router.post("/register", async (req, res) => {
   const body = req.body as CreateAgentRequestBody;
@@ -468,6 +545,7 @@ router.post("/register", async (req, res) => {
         },
         firebaseBlack: { uid: result.firebaseBlackUid },
         firebasePink: { uid: result.firebasePinkUid },
+        firebaseBlue: { uid: result.firebaseBlueUid },
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Registration failed";
@@ -544,6 +622,9 @@ router.post("/register", async (req, res) => {
       },
       firebasePink: {
         uid: result.firebasePinkUid,
+      },
+      firebaseBlue: {
+        uid: result.firebaseBlueUid,
       },
     });
   } catch (e) {

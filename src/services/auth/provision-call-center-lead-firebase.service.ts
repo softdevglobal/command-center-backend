@@ -1,8 +1,10 @@
 import admin from "firebase-admin";
 
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
+import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
 import { getFirebasePinkApp } from "../../db/firebase/firebase.pink.js";
 import { ensureFirebaseBlackAuthUser } from "./ensure-firebase-black-auth-user.service.js";
+import { ensureFirebaseBlueAuthUser } from "./ensure-firebase-blue-auth-user.service.js";
 import { ensureFirebasePinkAuthUser } from "./ensure-firebase-pink-auth-user.service.js";
 
 /**
@@ -35,15 +37,16 @@ async function upsertSuperAdminsDoc(
 export type ProvisionLeadFirebaseResult = {
   blackUid?: string;
   pinkUid?: string;
+  blueUid?: string;
   warnings: string[];
 };
 
 /**
- * Ensures Firebase Auth users exist in BMS Black (and Pink when configured) **and**
- * `super_admins/{uid}` docs so `verifyCallCenterOrTenantAdminAuth` / `verifyAdminAuth` accept them.
+ * Ensures Firebase Auth users exist in BMS Black, Pink, and Blue (trade) **and**
+ * `super_admins/{uid}` Firestore docs so BMS / trade admin UIs accept the account.
  *
- * Used for Command Center bootstrap users (Supabase `super_admin` / configured lead roles) who never
- * ran BMS “create super admin” in each Firebase project.
+ * Used for Command Center bootstrap (`POST /api/super-admin/register`) and any flow that mirrors
+ * BMS “create super admin” without calling each platform’s HTTP API directly.
  */
 export async function provisionCallCenterLeadFirebaseIdentities(input: {
   email: string;
@@ -94,9 +97,31 @@ export async function provisionCallCenterLeadFirebaseIdentities(input: {
     }
   }
 
+  let blueUid: string | undefined;
+  const blueApp = getFirebaseBlueApp();
+  if (!blueApp) {
+    warnings.push(
+      "Firebase Blue Admin SDK not configured — set FIREBASE_BLUE_* credentials (bmspro-trade)."
+    );
+  } else {
+    try {
+      blueUid = await ensureFirebaseBlueAuthUser({
+        email,
+        password: input.password,
+        displayName: dn,
+      });
+      await upsertSuperAdminsDoc(blueApp, blueUid, email, dn);
+    } catch (e) {
+      warnings.push(
+        `Firebase Blue provisioning failed: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+  }
+
   return {
     ...(blackUid !== undefined ? { blackUid } : {}),
     ...(pinkUid !== undefined ? { pinkUid } : {}),
+    ...(blueUid !== undefined ? { blueUid } : {}),
     warnings,
   };
 }

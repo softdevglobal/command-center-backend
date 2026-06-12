@@ -21,6 +21,7 @@ import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
+import bmsBlueSupportChatRoutes from "./bms_blue/chat.routes.js";
 import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
 import businessRoutes from "./firebase/business.routes.js";
 import invoicesRoutes from "./firebase/invoices.routes.js";
@@ -54,7 +55,7 @@ router.get("/", (_req, res) => {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
       "POST /api/auth/login":
-        "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
+        "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit), Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit), and Blue (FIREBASE_BLUE_WEB_API_KEY → firebaseBlueIdentityToolkit).",
       "POST /api/auth/refresh":
         "Refresh Supabase access_token — body { refresh_token } from login; same 4h sessionValidUntil window.",
       "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
@@ -110,6 +111,18 @@ router.get("/", (_req, res) => {
       "POST /api/bms-black/agent/conversations/:conversationId/read": "Mark conversation read.",
       "POST /api/bms-black/agent/conversations/:conversationId/close":
         "Close conversation — optional body { farewellMessage }.",
+      "GET /api/bms-blue/agent/conversations":
+        "Blue support chat queue + mine — Supabase Bearer + stored Firebase Blue idToken; optional query queueLimit, mineLimit. Proxies to BLUE_API_BASE_URL/api/chat/conversations/agent.",
+      "GET /api/bms-blue/agent/conversations/:conversationId/messages":
+        "Blue chat messages — optional query limit, before.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/messages":
+        "Blue send agent message — body { message }.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/claim":
+        "Blue claim waiting conversation.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/read":
+        "Blue mark conversation read.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/close":
+        "Blue close conversation — optional body { farewellMessage }.",
       "GET /api/bms-black/chats/workshop-owners":
         "List workshop owners for agent chat — Supabase Bearer + stored Firebase token; optional X-Tenant-Id.",
       "POST /api/bms-black/chats/start-with-owner":
@@ -342,6 +355,9 @@ router.use("/bms-black", bmsBlackCallCenterNotificationsRoutes);
 router.use("/bms-black", bmsBlackSupportChatRoutes);
 router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 router.use("/bms-black", bmsBlackCallCenterBranchRoutes);
+
+/** BMS Blue proxies (Supabase Bearer + stored Firebase Blue idToken from login). */
+router.use("/bms-blue", bmsBlueSupportChatRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {

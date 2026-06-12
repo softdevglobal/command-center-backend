@@ -7,6 +7,8 @@ import {
 } from "../../db/supabase/supabase.client.js";
 import { signInFirebaseBlackWithPassword } from "./firebase-black-login.service.js";
 import { rememberFirebaseBlackIdentityForUser } from "./firebase-black-login.store.js";
+import { signInFirebaseBlueWithPassword } from "./firebase-blue-login.service.js";
+import { rememberFirebaseBlueIdentityForUser } from "./firebase-blue-login.store.js";
 import { signInFirebasePinkWithPassword } from "./firebase-pink-login.service.js";
 import { rememberFirebasePinkIdentityForUser } from "./firebase-pink-login.store.js";
 import { authSessionTokenExpiryForResponse } from "./firebase-stored-session.config.js";
@@ -20,11 +22,11 @@ export type LoginInput = {
   password: string;
 };
 
-/** Login JSON status for Black/Pink Identity Toolkit (idTokens stored server-side, not in response). */
+/** Login JSON status for Black/Pink/Blue Identity Toolkit (idTokens stored server-side, not in response). */
 export type FirebaseIdentityToolkitLogin =
   | {
       ok: true;
-      /** Firebase idToken saved in memory — `firebase-black-login.store` or `firebase-pink-login.store`. */
+      /** Firebase idToken saved in memory — `firebase-*-login.store`. */
       stored: true;
       localId?: string | undefined;
       email?: string | undefined;
@@ -60,6 +62,11 @@ export type LoginSuccess = {
    * (`firebase-pink-login.store.ts`) — not returned in this JSON.
    */
   firebasePinkIdentityToolkit?: FirebaseIdentityToolkitLogin;
+  /**
+   * Blue Firebase sign-in status. On success, idToken is stored server-side only
+   * (`firebase-blue-login.store.ts`) — not returned in this JSON.
+   */
+  firebaseBlueIdentityToolkit?: FirebaseIdentityToolkitLogin;
   /**
    * Unix seconds — Supabase + Firebase sessions stay valid until this time (default 4h).
    * Server auto-refreshes Supabase access_token and Firebase idTokens on each API call.
@@ -307,6 +314,56 @@ export async function loginWithSupabasePassword(
     };
   }
 
+  const firebaseBlueWebApiKey = (
+    process.env.FIREBASE_BLUE_WEB_API_KEY ?? ""
+  ).trim();
+  if (firebaseBlueWebApiKey) {
+    const bluePass = await signInFirebaseBlueWithPassword({
+      email: input.email.trim(),
+      password: input.password,
+      webApiKey: firebaseBlueWebApiKey,
+    });
+    if (bluePass.ok) {
+      const idTokenBlue = bluePass.data.idToken;
+      if (idTokenBlue) {
+        const bd = bluePass.data;
+        rememberFirebaseBlueIdentityForUser({
+          supabaseUserId: data.user.id,
+          idToken: idTokenBlue,
+          refreshToken: bd.refreshToken,
+          expiresIn: bd.expiresIn,
+          email: bd.email ?? input.email.trim(),
+        });
+        body.firebaseBlueIdentityToolkit = {
+          ok: true,
+          stored: true,
+          localId: bd.localId,
+          email: bd.email,
+          displayName: bd.displayName,
+          registered: bd.registered,
+          sessionValidUntil: firebaseSessionValidUntilSec,
+          sessionValidHours: firebaseSessionValidHours,
+        };
+      } else {
+        body.firebaseBlueIdentityToolkit = {
+          ok: false,
+          error: "Missing idToken in Identity Toolkit response.",
+        };
+      }
+    } else {
+      body.firebaseBlueIdentityToolkit = {
+        ok: false,
+        error: bluePass.message,
+      };
+    }
+  } else {
+    body.firebaseBlueIdentityToolkit = {
+      ok: false,
+      error:
+        "SKIPPED — set FIREBASE_BLUE_WEB_API_KEY on the Command Center server (.env), then restart. Use the Web API key from Firebase Console → Project settings (Blue/bmspro-trade project).",
+    };
+  }
+
   const loginEmailLabel =
     data.user.email ?? userOut.email ?? input.email.trim();
   const bannerLines: string[] = [
@@ -359,6 +416,32 @@ export async function loginWithSupabasePassword(
     );
   } else {
     bannerLines.push("    (unexpected — no Pink toolkit result)");
+  }
+
+  bannerLines.push(
+    "4) Google Identity Toolkit (accounts:signInWithPassword, bmspro-trade / Blue):"
+  );
+  if (!firebaseBlueWebApiKey) {
+    bannerLines.push(
+      "    SKIPPED — FIREBASE_BLUE_WEB_API_KEY is empty.",
+      "    -> Add the Blue Web API key to .env (Firebase console → Project settings → Web API key)."
+    );
+  } else if (body.firebaseBlueIdentityToolkit?.ok === true) {
+    const b = body.firebaseBlueIdentityToolkit;
+    bannerLines.push(
+      "    SUCCESS — same email/password accepted by Firebase Blue.",
+      `    localId: ${b.localId ?? "n/a"}   registered: ${String(b.registered)}   idToken: stored server-side (firebase-blue-login.store)`
+    );
+  } else if (
+    body.firebaseBlueIdentityToolkit &&
+    body.firebaseBlueIdentityToolkit.ok === false
+  ) {
+    bannerLines.push(
+      "    FAILED — Firebase Blue did not return a usable session for this password.",
+      `    -> ${body.firebaseBlueIdentityToolkit.error}`
+    );
+  } else {
+    bannerLines.push("    (unexpected — no Blue toolkit result)");
   }
   logBmsLoginTerminalBanner(bannerLines);
 

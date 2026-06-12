@@ -24,14 +24,17 @@ export type BootstrapSuperAdminResult = {
 };
 
 /**
- * Creates a Command Center super admin in **three** places:
- *   1. Supabase Auth user + `user_roles.role = super_admin` (so Command Center login works).
- *   2. Firebase **Black** Auth + Firestore `super_admins/{uid}` (so BMS Black call-center APIs accept the token).
- *   3. Firebase **Pink**  Auth + Firestore `super_admins/{uid}` (so BMS Pink call-center APIs accept the token).
+ * Creates a Command Center super admin in **four** identity stores:
+ *   1. **Supabase** Auth user + `user_roles.role = super_admin` (Command Center `POST /api/auth/login`).
+ *   2. **Firebase Black** Auth + Firestore `super_admins/{uid}` (bmspro-black).
+ *   3. **Firebase Pink**  Auth + Firestore `super_admins/{uid}` (bmspro-pink).
+ *   4. **Firebase Blue**  Auth + Firestore `super_admins/{uid}` (bmspro-trade).
  *
- * Firebase step is best-effort: if Admin SDK credentials are missing on Command Center, Supabase still
- * succeeds and the response surfaces a warning so the caller can fix env + retry.
- * Role label: SUPABASE_SUPER_ADMIN_ROLE or default `super_admin` (must exist on enum `app_role`).
+ * Invoked only from `POST /api/super-admin/register` (header `x-setup-secret`).
+ * Firebase steps are best-effort: Supabase creation is required; missing Firebase env vars become
+ * `firebase.warnings` in the JSON response.
+ *
+ * Role label: `SUPABASE_SUPER_ADMIN_ROLE` or default `super_admin` (must exist on enum `app_role`).
  */
 export async function bootstrapSuperAdminSupabase(
   input: BootstrapSuperAdminBody
