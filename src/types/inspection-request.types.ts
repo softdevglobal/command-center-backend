@@ -1,4 +1,4 @@
-/** Firestore `inspection_requests/{id}` on bmspro-trade (Firebase Blue). */
+/** Firestore `requests/{id}` on bmspro-trade (Firebase Blue). */
 export type InspectionRequestRecord = {
   id: string;
 } & Record<string, unknown>;

@@ -10,7 +10,7 @@ import type {
   InspectionRequestRecord,
 } from "../../types/inspection-request.types.js";
 
-const COLLECTION = "inspection_requests";
+const COLLECTION = "requests";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const ORDER_FIELD = "createdAt";

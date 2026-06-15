@@ -16,6 +16,7 @@ import {
   proxyBlackCallCenterRescheduleBooking,
 } from "../../services/bms_black/black-call-center-bookings.proxy.service.js";
 import { proxyBlackCallCenterStaff } from "../../services/bms_black/black-call-center-staff.proxy.service.js";
+import { findBlackBookingsByPhoneInFirestore } from "../../services/firestore/black-bookings.firestore.service.js";
 import {
   forwardUpstream,
   resolveBlackTenantProxyContext,
@@ -71,6 +72,38 @@ router.get(
     );
   }
 );
+
+/**
+ * GET /api/bms-black/bookings/by-phone?phone=&ownerUid=
+ * Reads the root `bookings` collection on bmspro-black via the Admin SDK (no Black HTTP proxy).
+ * Sri Lankan phone variants are matched with `in` queries on clientPhone / customerPhone /
+ * phone / contactNumber; optional ownerUid filtering happens in memory (no composite index).
+ * Always 200 with `{ bookings: [...] }` — empty array when nothing matches.
+ */
+router.get("/bookings/by-phone", attachSupabaseUser, async (req, res) => {
+  const phone = singleQuery(req.query.phone);
+  if (!phone) {
+    res.status(400).json({
+      error: "Missing required query parameter phone.",
+    });
+    return;
+  }
+
+  const ownerUid = singleQuery(req.query.ownerUid);
+
+  try {
+    const bookings = await findBlackBookingsByPhoneInFirestore({
+      phone,
+      ...(ownerUid ? { ownerUid } : {}),
+    });
+    res.json({ bookings });
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "Failed to look up bookings by phone.";
+    console.error(`[bms-black bookings/by-phone] ${msg}`);
+    res.status(500).json({ error: msg });
+  }
+});
 
 /**
  * GET /api/bms-black/staff?branchId=&role=&status=

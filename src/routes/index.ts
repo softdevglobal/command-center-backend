@@ -57,7 +57,8 @@ router.get("/", (_req, res) => {
         "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
       "POST /api/auth/refresh":
         "Refresh Supabase access_token — body { refresh_token } from login; same 4h sessionValidUntil window.",
-      "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
+      "GET /api/auth/me":
+        "Current profile (Authorization: Bearer access_token); includes firebaseUid (BMS Firebase Black UID from agents.firebase_black_uid, or null).",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
       "GET /api/agents":
@@ -74,6 +75,8 @@ router.get("/", (_req, res) => {
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
         "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
+      "GET /api/bms-black/bookings/by-phone":
+        "Bookings by caller phone from Firestore bookings (bmspro-black, Admin SDK) — Supabase Bearer; query phone (required, Sri Lankan variants matched), ownerUid (optional, filtered in memory); returns { bookings: [...] }, max 200 most recent.",
       "GET /api/bms-black/staff":
         "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
       "POST /api/bms-black/bookings":
@@ -149,15 +152,15 @@ router.get("/", (_req, res) => {
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
-      "GET /api/inspection-requests":
-        "List inspection requests from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
-      "POST /api/inspection-requests":
-        "Create inspection request in Firestore inspection_requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
-      "GET /api/inspection-requests/businesses/:businessId":
-        "List inspection requests for one business from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
-      "POST /api/inspection-requests/businesses/:businessId":
+      "GET /api/requests":
+        "List inspection requests from Firestore requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/requests":
+        "Create inspection request in Firestore requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
+      "GET /api/requests/businesses/:businessId":
+        "List inspection requests for one business from Firestore requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/requests/businesses/:businessId":
         "Create inspection request for one business id — Supabase Bearer; businessId comes from URL and must match body.businessId if provided.",
-      "GET /api/inspection-requests/:id":
+      "GET /api/requests/:id":
         "Get one inspection request by id — Supabase Bearer",
       "GET /api/businesses":
         "List registered businesses from Firestore businesses (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
@@ -168,9 +171,9 @@ router.get("/", (_req, res) => {
       "GET /api/invoices/:id":
         "Get one invoice by id from Firestore invoices (bmspro-trade) — Supabase Bearer",
       "GET /api/dashboard/metrics":
-        "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus, slaSeconds",
+        "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus (available; online is accepted as an alias), slaSeconds",
       "GET /api/dashboard/online-agents-count":
-        "Online agents count — same auth/filtering as dashboard metrics; defaults onlineStatus=online.",
+        "Online agents count — same auth/filtering as dashboard metrics; defaults onlineStatus=available.",
       "GET /api/dashboard/today-calls-count":
         "Today's calls count — same auth/filtering as dashboard metrics.",
       "GET /api/dashboard/answer-rate":
@@ -297,8 +300,8 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
 
-/** Inspection requests — Firestore `inspection_requests` on bmspro-trade (Firebase Blue). */
-router.use("/inspection-requests", inspectionRequestsRoutes);
+/** Inspection requests — Firestore `requests` on bmspro-trade (Firebase Blue). */
+router.use("/requests", inspectionRequestsRoutes);
 
 /** Registered businesses — Firestore `businesses` on bmspro-trade (Firebase Blue). */
 router.use("/businesses", businessRoutes);

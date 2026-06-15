@@ -50,8 +50,8 @@ function authExtras(res: import("express").Response) {
 }
 
 /**
- * GET /api/inspection-requests
- * All documents from Firestore `inspection_requests` (bmspro-trade). Optional ?limit=&offset=
+ * GET /api/requests
+ * All documents from Firestore `requests` (bmspro-trade). Optional ?limit=&offset=
  */
 router.get("/", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -80,8 +80,8 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * POST /api/inspection-requests
- * Create a Firestore `inspection_requests` document with auto-generated id/timestamps.
+ * POST /api/requests
+ * Create a Firestore `requests` document with auto-generated id/timestamps.
  */
 router.post("/", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -120,8 +120,8 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * GET /api/inspection-requests/businesses/:businessId
- * Inspection requests for one business id from Firestore `inspection_requests`.
+ * GET /api/requests/businesses/:businessId
+ * Inspection requests for one business id from Firestore `requests`.
  * Optional ?limit=&offset=
  */
 router.get("/businesses/:businessId", async (req, res) => {
@@ -163,8 +163,8 @@ router.get("/businesses/:businessId", async (req, res) => {
 });
 
 /**
- * POST /api/inspection-requests/businesses/:businessId
- * Create a Firestore `inspection_requests` document for one business id.
+ * POST /api/requests/businesses/:businessId
+ * Create a Firestore `requests` document for one business id.
  */
 router.post("/businesses/:businessId", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -223,7 +223,7 @@ router.post("/businesses/:businessId", async (req, res) => {
 });
 
 /**
- * GET /api/inspection-requests/:id
+ * GET /api/requests/:id
  */
 router.get("/:id", async (req, res) => {
   if (!res.locals.supabaseAuth) {

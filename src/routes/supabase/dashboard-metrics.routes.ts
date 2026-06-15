@@ -22,7 +22,7 @@ import type {
 } from "../../types/call.types.js";
 
 const router = Router();
-const DEFAULT_ONLINE_STATUSES = ["online"];
+const DEFAULT_ONLINE_STATUSES = ["available"];
 const DEFAULT_SLA_SECONDS = 20;
 
 function requireSupabaseConfig(
@@ -76,6 +76,19 @@ function queryNumber(value: unknown): number | undefined {
   if (!text) return undefined;
   const numberValue = Number(text);
   return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function dashboardOnlineStatuses(query: Record<string, unknown>): string[] {
+  const requested =
+    queryStrings(query.onlineStatus).length > 0
+      ? queryStrings(query.onlineStatus)
+      : queryStrings(query.onlineStatuses).length > 0
+        ? queryStrings(query.onlineStatuses)
+        : DEFAULT_ONLINE_STATUSES;
+
+  return requested.map((status) =>
+    status.toLowerCase() === "online" ? "available" : status
+  );
 }
 
 function utcDayBounds(date: Date): { from: string; to: string } {
@@ -214,12 +227,7 @@ function parseDashboardFilters(query: Record<string, unknown>): ParseFiltersResu
     return { ok: false, error: "slaSeconds must be greater than 0." };
   }
 
-  const onlineStatuses =
-    queryStrings(query.onlineStatus).length > 0
-      ? queryStrings(query.onlineStatus)
-      : queryStrings(query.onlineStatuses).length > 0
-        ? queryStrings(query.onlineStatuses)
-        : DEFAULT_ONLINE_STATUSES;
+  const onlineStatuses = dashboardOnlineStatuses(query);
 
   const tenantId = queryString(query.tenantId);
   const queueId = queryString(query.queueId);
@@ -301,7 +309,7 @@ async function authorizeMetricsRequest(
 
 /**
  * GET /api/dashboard/metrics
- * Returns all dashboard KPIs. Defaults to today's UTC calls and `online` agents.
+ * Returns all dashboard KPIs. Defaults to today's UTC calls and `available` agents.
  */
 router.get("/metrics", async (req, res) => {
   const auth = await authorizeMetricsRequest(req, res);
