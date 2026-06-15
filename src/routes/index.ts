@@ -21,6 +21,7 @@ import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
+import bmsBlackAgentActivityRoutes from "./bms_black/agent-activity/agent-activity.routes.js";
 import bmsBlueSupportChatRoutes from "./bms_blue/chat.routes.js";
 import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
 import businessRoutes from "./firebase/business.routes.js";
@@ -101,6 +102,8 @@ router.get("/", (_req, res) => {
         "Mark/unmark notification reviewed — body notificationReviewed true|false.",
       "POST /api/bms-black/customer-notifications/:notificationId/called-customer":
         "Log that customer was called.",
+      "POST /api/bms-black/agent-activities":
+        "Record call-center agent activity — Supabase Bearer + stored Firebase idToken; JSON body forwarded to Black POST /api/call-center/agent-activities; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations":
         "Support chat queue + mine — optional query queueLimit, mineLimit, ownerUid, tenantId; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations/:conversationId/messages":
@@ -355,6 +358,7 @@ router.use("/bms-black", bmsBlackCallCenterNotificationsRoutes);
 router.use("/bms-black", bmsBlackSupportChatRoutes);
 router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 router.use("/bms-black", bmsBlackCallCenterBranchRoutes);
+router.use("/bms-black", bmsBlackAgentActivityRoutes);
 
 /** BMS Blue proxies (Supabase Bearer + stored Firebase Blue idToken from login). */
 router.use("/bms-blue", bmsBlueSupportChatRoutes);
