@@ -27,10 +27,14 @@ export async function forwardUpstream(
   const status = upstream.status;
 
   if (status >= 400) {
+    let upstreamJson: unknown;
     if (ct.includes("application/json") && text.trim() !== "") {
       try {
-        res.status(status).json(JSON.parse(text) as unknown);
-        return;
+        upstreamJson = JSON.parse(text) as unknown;
+        if (status !== 413) {
+          res.status(status).json(upstreamJson);
+          return;
+        }
       } catch {
         /* fall through to structured error */
       }
@@ -52,9 +56,17 @@ export async function forwardUpstream(
               "Route not found on BMS Black. Deploy POST /api/call-center/agent-activities there, or set BLACK_API_BASE_URL=http://127.0.0.1:3000 in .env when running Black locally.",
           }
         : {}),
-      upstreamBody: isHtml
-        ? "(HTML error page from BMS Black — endpoint likely missing on that host)"
-        : text.trim().slice(0, 1000) || undefined,
+      ...(status === 413
+        ? {
+            hint:
+              "Upload was rejected by BMS Black or a proxy in front of it. Increase the upload/body limit on BLACK_API_BASE_URL, or upload the recording to storage first and send a recording URL.",
+          }
+        : {}),
+      upstreamBody:
+        upstreamJson ??
+        (isHtml
+          ? "(HTML error page from BMS Black — endpoint likely missing on that host)"
+          : text.trim().slice(0, 1000) || undefined),
     });
     return;
   }

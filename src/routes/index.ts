@@ -22,6 +22,7 @@ import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.rou
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
 import bmsBlackAgentActivityRoutes from "./bms_black/agent-activity/agent-activity.routes.js";
+import callCenterAgentActivityRoutes from "./call-center/agent-activities.routes.js";
 import bmsBlueSupportChatRoutes from "./bms_blue/chat.routes.js";
 import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
 import businessRoutes from "./firebase/business.routes.js";
@@ -102,8 +103,10 @@ router.get("/", (_req, res) => {
         "Mark/unmark notification reviewed — body notificationReviewed true|false.",
       "POST /api/bms-black/customer-notifications/:notificationId/called-customer":
         "Log that customer was called.",
+      "POST /api/call-center/agent-activities":
+        "Save Black queue agent activity in command-center — Supabase Bearer; multipart/form-data field recording is optional, max 100 MB; uploads recording to Firebase Black Storage and saves metadata/download URL in Firestore.",
       "POST /api/bms-black/agent-activities":
-        "Record call-center agent activity — Supabase Bearer + stored Firebase idToken; JSON body forwarded to Black POST /api/call-center/agent-activities; optional X-Tenant-Id.",
+        "Legacy proxy for call-center agent activity — Supabase Bearer + stored Firebase idToken; JSON/multipart body forwarded to Black POST /api/call-center/agent-activities; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations":
         "Support chat queue + mine — optional query queueLimit, mineLimit, ownerUid, tenantId; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations/:conversationId/messages":
@@ -351,6 +354,9 @@ router.use(
   "/sales-suburb-workshop-agent-contacts",
   salesSuburbWorkshopAgentContactsRoutes
 );
+
+/** Call-center agent activities — Firestore + optional Firebase Storage recording upload. */
+router.use("/call-center", callCenterAgentActivityRoutes);
 
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
