@@ -485,6 +485,31 @@ export async function refreshSupabaseAuthSession(
   return { ok: true, body };
 }
 
+/** BMS Firebase (Black) UID bridged via `agents.firebase_black_uid`, or null. */
+export async function firebaseBlackUidForSupabaseUser(
+  userId: string
+): Promise<string | null> {
+  const id = userId.trim();
+  const url = getSupabaseProjectUrl();
+  const key = getSupabaseServiceRoleKey();
+  if (!url || !key || !id) return null;
+
+  try {
+    const admin = createSupabaseClient(url, key);
+    const { data, error } = await admin
+      .from("agents")
+      .select("firebase_black_uid")
+      .eq("user_id", id)
+      .maybeSingle();
+    if (error) return null;
+    const uid = (data as { firebase_black_uid?: string | null } | null)
+      ?.firebase_black_uid;
+    return typeof uid === "string" && uid.trim() ? uid.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Shape for GET /me — same fields clients expect from login profile. */
 export function sessionSummaryFromLocals(input: {
   user: import("@supabase/supabase-js").User;

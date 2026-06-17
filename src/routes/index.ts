@@ -60,7 +60,8 @@ router.get("/", (_req, res) => {
         "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit), Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit), and Blue (FIREBASE_BLUE_WEB_API_KEY → firebaseBlueIdentityToolkit).",
       "POST /api/auth/refresh":
         "Refresh Supabase access_token — body { refresh_token } from login; same 4h sessionValidUntil window.",
-      "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
+      "GET /api/auth/me":
+        "Current profile (Authorization: Bearer access_token); includes firebaseUid (BMS Firebase Black UID from agents.firebase_black_uid, or null).",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
       "GET /api/agents":
@@ -77,6 +78,8 @@ router.get("/", (_req, res) => {
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
         "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
+      "GET /api/bms-black/bookings/by-phone":
+        "Bookings by caller phone from Firestore bookings (bmspro-black, Admin SDK) — Supabase Bearer; query phone (required), ownerUid (optional, filtered in memory); returns { bookings: [...] }, max 200 most recent.",
       "GET /api/bms-black/staff":
         "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
       "POST /api/bms-black/bookings":

@@ -16,6 +16,7 @@ import {
   proxyBlackCallCenterRescheduleBooking,
 } from "../../services/bms_black/black-call-center-bookings.proxy.service.js";
 import { proxyBlackCallCenterStaff } from "../../services/bms_black/black-call-center-staff.proxy.service.js";
+import { findBlackBookingsByPhoneInFirestore } from "../../services/firestore/black-bookings.firestore.service.js";
 import {
   forwardUpstream,
   resolveBlackTenantProxyContext,
@@ -71,6 +72,37 @@ router.get(
     );
   }
 );
+
+/**
+ * GET /api/bms-black/bookings/by-phone?phone=&ownerUid=
+ * Firestore root `bookings` on bmspro-black via Admin SDK (not Black HTTP proxy).
+ * Phone variants matched with `in` on clientPhone / customerPhone / phone / contactNumber;
+ * ownerUid filtered in memory. Always 200 with `{ bookings: [...] }`.
+ */
+router.get("/bookings/by-phone", attachSupabaseUser, async (req, res) => {
+  const phone = singleQuery(req.query.phone);
+  if (!phone) {
+    res.status(400).json({
+      error: "Missing required query parameter phone.",
+    });
+    return;
+  }
+
+  const ownerUid = singleQuery(req.query.ownerUid);
+
+  try {
+    const bookings = await findBlackBookingsByPhoneInFirestore({
+      phone,
+      ...(ownerUid ? { ownerUid } : {}),
+    });
+    res.json({ bookings });
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : "Failed to look up bookings by phone.";
+    console.error(`[bms-black bookings/by-phone] ${msg}`);
+    res.status(500).json({ error: msg });
+  }
+});
 
 /**
  * GET /api/bms-black/staff?branchId=&role=&status=

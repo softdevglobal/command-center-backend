@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
 import {
+  firebaseBlackUidForSupabaseUser,
   loginWithSupabasePassword,
   refreshSupabaseAuthSession,
   sessionSummaryFromLocals,
@@ -125,14 +126,16 @@ router.post("/refresh", async (req, res) => {
 /**
  * GET /api/auth/me
  * Authorization: Bearer <access_token from /api/auth/login>
+ * Includes `firebaseUid` (BMS Firebase Black UID from agents.firebase_black_uid, or null).
  */
-router.get("/me", attachSupabaseUser, (req, res) => {
+router.get("/me", attachSupabaseUser, async (req, res) => {
   const auth = res.locals.supabaseAuth;
   if (!auth) {
     res.status(500).json({ error: "Internal error" });
     return;
   }
-  res.json(sessionSummaryFromLocals(auth));
+  const firebaseUid = await firebaseBlackUidForSupabaseUser(auth.user.id);
+  res.json({ ...sessionSummaryFromLocals(auth), firebaseUid });
 });
 
 export default router;
