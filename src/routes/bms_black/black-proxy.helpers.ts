@@ -19,11 +19,59 @@ export function singleQuery(value: unknown): string {
 
 export async function forwardUpstream(
   res: Response,
-  upstream: globalThis.Response
+  upstream: globalThis.Response,
+  meta?: { upstreamUrl?: string }
 ): Promise<void> {
   const text = await upstream.text();
   const ct = upstream.headers.get("content-type") ?? "";
-  res.status(upstream.status);
+  const status = upstream.status;
+
+  if (status >= 400) {
+    let upstreamJson: unknown;
+    if (ct.includes("application/json") && text.trim() !== "") {
+      try {
+        upstreamJson = JSON.parse(text) as unknown;
+        if (status !== 413) {
+          res.status(status).json(upstreamJson);
+          return;
+        }
+      } catch {
+        /* fall through to structured error */
+      }
+    }
+
+    const isHtml =
+      text.includes("<!DOCTYPE") ||
+      text.includes("<html") ||
+      ct.includes("text/html");
+
+    res.status(status).json({
+      ok: false,
+      error: `Upstream BMS Black returned ${status}${upstream.statusText ? ` ${upstream.statusText}` : ""}`,
+      upstreamStatus: status,
+      ...(meta?.upstreamUrl ? { upstreamUrl: meta.upstreamUrl } : {}),
+      ...(status === 404
+        ? {
+            hint:
+              "Route not found on BMS Black. Deploy POST /api/call-center/agent-activities there, or set BLACK_API_BASE_URL=http://127.0.0.1:3000 in .env when running Black locally.",
+          }
+        : {}),
+      ...(status === 413
+        ? {
+            hint:
+              "Upload was rejected by BMS Black or a proxy in front of it. Increase the upload/body limit on BLACK_API_BASE_URL, or upload the recording to storage first and send a recording URL.",
+          }
+        : {}),
+      upstreamBody:
+        upstreamJson ??
+        (isHtml
+          ? "(HTML error page from BMS Black — endpoint likely missing on that host)"
+          : text.trim().slice(0, 1000) || undefined),
+    });
+    return;
+  }
+
+  res.status(status);
   if (ct.includes("application/json") && text.trim() !== "") {
     try {
       res.json(JSON.parse(text) as unknown);
@@ -94,7 +142,8 @@ export async function resolveBlackTenantProxyContext(
 
 export async function runBlackProxy(
   res: Response,
-  call: () => Promise<globalThis.Response>
+  call: () => Promise<globalThis.Response>,
+  meta?: { upstreamUrl?: string }
 ): Promise<void> {
   let upstream: globalThis.Response;
   try {
@@ -104,5 +153,5 @@ export async function runBlackProxy(
     res.status(502).json({ success: false, error: msg });
     return;
   }
-  await forwardUpstream(res, upstream);
+  await forwardUpstream(res, upstream, meta);
 }

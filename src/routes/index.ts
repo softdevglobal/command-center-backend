@@ -21,6 +21,12 @@ import bmsBlackSupportChatRoutes from "./bms_black/chat.routes.js";
 import bmsBlackCallCenterNotificationsRoutes from "./bms_black/notifications.routes.js";
 import bmsBlackCallCenterServicesRoutes from "./bms_black/services.routes.js";
 import bmsBlackCallCenterBranchRoutes from "./bms_black/branch.routes.js";
+import bmsBlackAgentActivityRoutes from "./bms_black/agent-activity/agent-activity.routes.js";
+import callCenterAgentActivityRoutes from "./call-center/agent-activities.routes.js";
+import bmsBlueSupportChatRoutes from "./bms_blue/chat.routes.js";
+import inspectionRequestsRoutes from "./firebase/inspection-requests.routes.js";
+import businessRoutes from "./firebase/business.routes.js";
+import invoicesRoutes from "./firebase/invoices.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
 import {
   getSupabaseClient,
@@ -51,8 +57,11 @@ router.get("/", (_req, res) => {
       "POST /api/super-admin/register":
         "Bootstrap super admin (header x-setup-secret + SETUP_SECRET_KEY)",
       "POST /api/auth/login":
-        "Sign in — Supabase session; optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit) and Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit).",
-      "GET /api/auth/me": "Current profile (Authorization: Bearer access_token)",
+        "Sign in — Supabase session (4h, auto-refresh on API calls); optional Identity Toolkit for Black (FIREBASE_BLACK_WEB_API_KEY → firebaseBlackIdentityToolkit), Pink (FIREBASE_PINK_WEB_API_KEY → firebasePinkIdentityToolkit), and Blue (FIREBASE_BLUE_WEB_API_KEY → firebaseBlueIdentityToolkit).",
+      "POST /api/auth/refresh":
+        "Refresh Supabase access_token — body { refresh_token } from login; same 4h sessionValidUntil window.",
+      "GET /api/auth/me":
+        "Current profile (Authorization: Bearer access_token); includes firebaseUid (BMS Firebase Black UID from agents.firebase_black_uid, or null).",
       "POST /api/agents/register":
         "Create agent — Bearer (super-admin JWT) OR x-setup-secret = SETUP_SECRET_KEY. Runs on Command Center: Supabase + Firebase Black + Pink (no BMS Black HTTP).",
       "GET /api/agents":
@@ -69,6 +78,8 @@ router.get("/", (_req, res) => {
         "Proxy Black bookings list — Supabase Bearer; stored Firebase idToken upstream.",
       "GET /api/bms-black/bookings/availability":
         "Booking availability — Supabase Bearer + X-Tenant-Id (owner uid); query branchId, date, serviceIds.",
+      "GET /api/bms-black/bookings/by-phone":
+        "Bookings by caller phone from Firestore bookings (bmspro-black, Admin SDK) — Supabase Bearer; query phone (required), ownerUid (optional, filtered in memory); returns { bookings: [...] }, max 200 most recent.",
       "GET /api/bms-black/staff":
         "Workshop staff — Supabase Bearer + X-Tenant-Id; required query branchId; optional role, status.",
       "POST /api/bms-black/bookings":
@@ -95,6 +106,10 @@ router.get("/", (_req, res) => {
         "Mark/unmark notification reviewed — body notificationReviewed true|false.",
       "POST /api/bms-black/customer-notifications/:notificationId/called-customer":
         "Log that customer was called.",
+      "POST /api/call-center/agent-activities":
+        "Save Black queue agent activity in command-center — Supabase Bearer; multipart/form-data field recording is optional, max 100 MB; uploads recording to Firebase Black Storage and saves metadata/download URL in Firestore.",
+      "POST /api/bms-black/agent-activities":
+        "Legacy proxy for call-center agent activity — Supabase Bearer + stored Firebase idToken; JSON/multipart body forwarded to Black POST /api/call-center/agent-activities; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations":
         "Support chat queue + mine — optional query queueLimit, mineLimit, ownerUid, tenantId; optional X-Tenant-Id.",
       "GET /api/bms-black/agent/conversations/:conversationId/messages":
@@ -105,6 +120,18 @@ router.get("/", (_req, res) => {
       "POST /api/bms-black/agent/conversations/:conversationId/read": "Mark conversation read.",
       "POST /api/bms-black/agent/conversations/:conversationId/close":
         "Close conversation — optional body { farewellMessage }.",
+      "GET /api/bms-blue/agent/conversations":
+        "Blue support chat queue + mine — Supabase Bearer + stored Firebase Blue idToken; optional query queueLimit, mineLimit. Proxies to BLUE_API_BASE_URL/api/chat/conversations/agent.",
+      "GET /api/bms-blue/agent/conversations/:conversationId/messages":
+        "Blue chat messages — optional query limit, before.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/messages":
+        "Blue send agent message — body { message }.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/claim":
+        "Blue claim waiting conversation.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/read":
+        "Blue mark conversation read.",
+      "POST /api/bms-blue/agent/conversations/:conversationId/close":
+        "Blue close conversation — optional body { farewellMessage }.",
       "GET /api/bms-black/chats/workshop-owners":
         "List workshop owners for agent chat — Supabase Bearer + stored Firebase token; optional X-Tenant-Id.",
       "POST /api/bms-black/chats/start-with-owner":
@@ -144,6 +171,24 @@ router.get("/", (_req, res) => {
       "GET /api/calls":
         "List calls — super admin: all + recording_url; agent: answered only (no recording_url). Bearer. Filters: callerName, direction=inbound|outbound OR inbound=true|outbound=true, date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId (super admin), result, limit, offset",
       "GET /api/calls/:id": "Get one call — same access rules as list",
+      "GET /api/inspection-requests":
+        "List inspection requests from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/inspection-requests":
+        "Create inspection request in Firestore inspection_requests (bmspro-trade) — Supabase Bearer; validates address/customer/service/preferredSlots; id and timestamps are generated automatically.",
+      "GET /api/inspection-requests/businesses/:businessId":
+        "List inspection requests for one business from Firestore inspection_requests (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "POST /api/inspection-requests/businesses/:businessId":
+        "Create inspection request for one business id — Supabase Bearer; businessId comes from URL and must match body.businessId if provided.",
+      "GET /api/inspection-requests/:id":
+        "Get one inspection request by id — Supabase Bearer",
+      "GET /api/businesses":
+        "List registered businesses from Firestore businesses (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "GET /api/businesses/:id":
+        "Get one registered business by id from Firestore businesses (bmspro-trade) — Supabase Bearer",
+      "GET /api/invoices":
+        "List invoices from Firestore invoices (bmspro-trade) — Supabase Bearer; optional ?limit=&offset=",
+      "GET /api/invoices/:id":
+        "Get one invoice by id from Firestore invoices (bmspro-trade) — Supabase Bearer",
       "GET /api/dashboard/metrics":
         "Dashboard KPIs — super-admin Bearer OR x-setup-secret; returns online_agents_count, today_calls_count, answer_rate_percent, abandon_rate_percent, average_handle_seconds, sla_percent. Filters: date=YYYY-MM-DD OR from=&to=, tenantId, queueId, agentId, direction, onlineStatus, slaSeconds",
       "GET /api/dashboard/online-agents-count":
@@ -183,6 +228,16 @@ router.get("/", (_req, res) => {
         "Send outbound TextBee SMS on a claimed thread — body { messageBody }.",
       "POST /api/sms/threads/:threadId/resolve":
         "Resolve SMS thread and clear unread count.",
+      "DELETE /api/sms/threads/:threadId":
+        "Permanently delete SMS thread and its messages — super admin only.",
+      "GET /api/sms/contacts":
+        "List SMS contacts — super admin or agent Bearer; filters: contactType, phone, ownerUid, search, limit, offset.",
+      "GET /api/sms/contacts/:id": "Get one SMS contact by UUID.",
+      "POST /api/sms/contacts":
+        "Create SMS contact — body { contactType: customer|owner, displayName, phone, ownerUid? }.",
+      "PATCH /api/sms/contacts/:id":
+        "Update SMS contact — body may include contactType, displayName, phone, ownerUid.",
+      "DELETE /api/sms/contacts/:id": "Delete SMS contact by UUID.",
       "GET /api/agent-attendance/status":
         "Current shift state — ?agentId=agents.id (e.g. agent-1777874280295) or ?userId=Auth UUID; returns { agent_id, state, last_event }",
       "GET /api/agent-attendance/reports":
@@ -209,7 +264,7 @@ router.get("/", (_req, res) => {
       "GET /api/agent-shift-schedules/:agentId":
         "Get one shift schedule by agents.id — agent: own only; super admin: any",
       "PUT /api/agent-shift-schedules/:agentId":
-        "Create/update a shift schedule — super admin only; body { monday?, tuesday?, wednesday?, thursday?, friday?, saturday?, sunday? } values are text or null",
+        "Create/update a shift schedule — super admin only; body accepts weekday text/null fields plus per-day queue ids, e.g. { monday?, mondayQueueId? } or { monday_queue_id? }",
       "GET /api/sales-suburb-workshops":
         "List workshop suburbs — super admin: all; agent: assigned suburbs only. Filters: tenantId, suburb, search, limit, offset",
       "POST /api/sales-suburb-workshops":
@@ -264,6 +319,15 @@ router.use("/system-audit-logs", systemAuditLogsRoutes);
 /** Call history — Supabase `calls` (super admin or agent Bearer). */
 router.use("/calls", callsRoutes);
 
+/** Inspection requests — Firestore `inspection_requests` on bmspro-trade (Firebase Blue). */
+router.use("/inspection-requests", inspectionRequestsRoutes);
+
+/** Registered businesses — Firestore `businesses` on bmspro-trade (Firebase Blue). */
+router.use("/businesses", businessRoutes);
+
+/** Invoices — Firestore `invoices` on bmspro-trade (Firebase Blue). */
+router.use("/invoices", invoicesRoutes);
+
 /** Dashboard call-center KPIs — Supabase `agents` + `calls`. */
 router.use("/dashboard", dashboardMetricsRoutes);
 
@@ -294,12 +358,19 @@ router.use(
   salesSuburbWorkshopAgentContactsRoutes
 );
 
+/** Call-center agent activities — Firestore + optional Firebase Storage recording upload. */
+router.use("/call-center", callCenterAgentActivityRoutes);
+
 /** BMS Black proxies (Supabase Bearer + stored Firebase idToken from login). */
 router.use("/bms-black", bmsBlackCallCenterBookingRoutes);
 router.use("/bms-black", bmsBlackCallCenterNotificationsRoutes);
 router.use("/bms-black", bmsBlackSupportChatRoutes);
 router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 router.use("/bms-black", bmsBlackCallCenterBranchRoutes);
+router.use("/bms-black", bmsBlackAgentActivityRoutes);
+
+/** BMS Blue proxies (Supabase Bearer + stored Firebase Blue idToken from login). */
+router.use("/bms-blue", bmsBlueSupportChatRoutes);
 
 /** Supabase + Firebase reachability (Firebase is not used to store agents). */
 router.get("/health/db", async (_req, res) => {

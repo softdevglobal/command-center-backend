@@ -2,7 +2,9 @@ import { Router } from "express";
 
 import { attachSupabaseUser } from "../middleware/supabase-auth.middleware.js";
 import {
+  firebaseBlackUidForSupabaseUser,
   loginWithSupabasePassword,
+  refreshSupabaseAuthSession,
   sessionSummaryFromLocals,
 } from "../services/auth/supabase-auth.service.js";
 import { createSystemAuditLog } from "../services/system-audit-logs.service.js";
@@ -30,13 +32,19 @@ function loginUserName(input: {
  *
  * Works for **super admins** and **agents** (any Supabase user with credentials).
  * Response includes access_token — send as Authorization: Bearer for protected routes.
+ * Sessions last **4 hours** (`AUTH_SESSION_HOURS`): Supabase access_token and Firebase
+ * Black/Pink/Blue idTokens are auto-refreshed on each API call. Login JSON includes
+ * `sessionValidUntil` / `sessionValidHours`. Optional: POST /api/auth/refresh with
+ * `refresh_token`, or read `X-Supabase-Access-Token` from API responses when rotated.
  *
- * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Google Identity Toolkit
- * `accounts:signInWithPassword` for bmspro-black (same email/password).
- * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink (`firebasePinkIdentityToolkit`).
+ * If `FIREBASE_BLACK_WEB_API_KEY` is set, also calls Identity Toolkit for bmspro-black.
+ * If `FIREBASE_PINK_WEB_API_KEY` is set, same for bmspro-pink.
+ * If `FIREBASE_BLUE_WEB_API_KEY` is set, same for bmspro-trade (`firebaseBlueIdentityToolkit`).
+ *
  * After each successful login the **server terminal** prints a bordered
- * `[BMS LOGIN]` summary (Supabase + Firebase SUCCESS / FAILED / SKIPPED).
- * The JSON body may include `firebaseBlackIdentityToolkit` and `firebasePinkIdentityToolkit`.
+ * `[BMS LOGIN]` summary (Supabase + Firebase Black/Pink/Blue SUCCESS / FAILED / SKIPPED).
+ * The JSON body may include `firebaseBlackIdentityToolkit`, `firebasePinkIdentityToolkit`,
+ * and `firebaseBlueIdentityToolkit`.
  */
 router.post("/login", async (req, res) => {
   const body = req.body as { email?: string; password?: string };
@@ -77,6 +85,10 @@ router.post("/login", async (req, res) => {
           result.body.firebasePinkIdentityToolkit?.ok === true
             ? "success"
             : "failed_or_skipped",
+        firebaseBlueIdentityToolkit:
+          result.body.firebaseBlueIdentityToolkit?.ok === true
+            ? "success"
+            : "failed_or_skipped",
       },
     });
   } catch (e) {
@@ -88,16 +100,42 @@ router.post("/login", async (req, res) => {
 });
 
 /**
+ * POST /api/auth/refresh
+ * Body: { refresh_token }
+ *
+ * Returns a new Supabase access_token (and refresh_token). Use when the JWT expires
+ * before `sessionValidUntil` (~4h). The server also auto-refreshes on each protected
+ * API call and may return `X-Supabase-Access-Token` on the response.
+ */
+router.post("/refresh", async (req, res) => {
+  const body = req.body as { refresh_token?: string };
+  if (!body?.refresh_token?.trim()) {
+    res.status(400).json({ error: "refresh_token is required" });
+    return;
+  }
+
+  const result = await refreshSupabaseAuthSession(body.refresh_token);
+  if (!result.ok) {
+    res.status(401).json({ error: result.message });
+    return;
+  }
+
+  res.json(result.body);
+});
+
+/**
  * GET /api/auth/me
  * Authorization: Bearer <access_token from /api/auth/login>
+ * Includes `firebaseUid` (BMS Firebase Black UID from agents.firebase_black_uid, or null).
  */
-router.get("/me", attachSupabaseUser, (req, res) => {
+router.get("/me", attachSupabaseUser, async (req, res) => {
   const auth = res.locals.supabaseAuth;
   if (!auth) {
     res.status(500).json({ error: "Internal error" });
     return;
   }
-  res.json(sessionSummaryFromLocals(auth));
+  const firebaseUid = await firebaseBlackUidForSupabaseUser(auth.user.id);
+  res.json({ ...sessionSummaryFromLocals(auth), firebaseUid });
 });
 
 export default router;

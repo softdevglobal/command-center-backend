@@ -1,10 +1,10 @@
 /**
- * Server-side bridge between **Supabase sessions** and **Firebase Pink idTokens**
- * (bmspro-pink), mirroring `firebase-black-login.store.ts`.
+ * Server-side bridge between **Supabase sessions** and **Firebase Blue idTokens**
+ * (bmspro-trade), mirroring `firebase-black-login.store.ts` and `firebase-pink-login.store.ts`.
  *
- * At login we call Identity Toolkit with `FIREBASE_PINK_WEB_API_KEY` and cache the
- * returned `idToken` + `refreshToken` keyed by Supabase `user.id`. Future Pink proxy
- * routes resolve the correct token via `getFirebasePinkIdTokenForSupabaseUser`,
+ * At login we call Identity Toolkit with `FIREBASE_BLUE_WEB_API_KEY` and cache the
+ * returned `idToken` + `refreshToken` keyed by Supabase `user.id`. Future Blue proxy
+ * routes resolve the correct token via `getFirebaseBlueIdTokenForSupabaseUser`,
  * which transparently refreshes near-expiry idTokens via the Secure Token API.
  */
 
@@ -14,8 +14,8 @@ import {
   getFirebaseStoredSessionHours,
 } from "./firebase-stored-session.config.js";
 
-/** One cached Firebase Pink session for a single Supabase Auth user. */
-export type FirebasePinkIdentityForUser = {
+/** One cached Firebase Blue session for a single Supabase Auth user. */
+export type FirebaseBlueIdentityForUser = {
   /** Firebase Identity Toolkit idToken (~1 hour lifetime). */
   idToken: string;
   /** Long-lived refresh token used to mint a new idToken before/after expiry. */
@@ -30,14 +30,14 @@ export type FirebasePinkIdentityForUser = {
   email?: string | undefined;
 };
 
-/** Supabase Auth `user.id` → latest Firebase Pink identity for that user. */
-const bySupabaseUserId = new Map<string, FirebasePinkIdentityForUser>();
+/** Supabase Auth `user.id` → latest Firebase Blue identity for that user. */
+const bySupabaseUserId = new Map<string, FirebaseBlueIdentityForUser>();
 
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
 
 const inflightRefresh = new Map<
   string,
-  Promise<FirebasePinkIdentityForUser | null>
+  Promise<FirebaseBlueIdentityForUser | null>
 >();
 
 function expiresAtFromExpiresIn(expiresIn: string | undefined): number | undefined {
@@ -48,9 +48,9 @@ function expiresAtFromExpiresIn(expiresIn: string | undefined): number | undefin
 }
 
 /**
- * Save (or replace) the Firebase Pink identity for one Supabase user after successful login.
+ * Save (or replace) the Firebase Blue identity for one Supabase user after successful login.
  */
-export function rememberFirebasePinkIdentityForUser(entry: {
+export function rememberFirebaseBlueIdentityForUser(entry: {
   supabaseUserId: string;
   idToken: string;
   refreshToken?: string | undefined;
@@ -59,7 +59,7 @@ export function rememberFirebasePinkIdentityForUser(entry: {
 }): void {
   const { supabaseUserId, idToken, refreshToken, expiresIn, email } = entry;
   if (!supabaseUserId.trim() || !idToken.trim()) return;
-  const row: FirebasePinkIdentityForUser = {
+  const row: FirebaseBlueIdentityForUser = {
     idToken: idToken.trim(),
     storedAt: new Date().toISOString(),
     sessionValidUntil: firebaseStoredSessionValidUntil(),
@@ -72,15 +72,15 @@ export function rememberFirebasePinkIdentityForUser(entry: {
   bySupabaseUserId.set(supabaseUserId.trim(), row);
 }
 
-function pinkWebApiKey(): string {
-  return (process.env.FIREBASE_PINK_WEB_API_KEY ?? "").trim();
+function blueWebApiKey(): string {
+  return (process.env.FIREBASE_BLUE_WEB_API_KEY ?? "").trim();
 }
 
 async function refreshRow(
   key: string,
-  row: FirebasePinkIdentityForUser
-): Promise<FirebasePinkIdentityForUser | null> {
-  const apiKey = pinkWebApiKey();
+  row: FirebaseBlueIdentityForUser
+): Promise<FirebaseBlueIdentityForUser | null> {
+  const apiKey = blueWebApiKey();
   if (!apiKey || !row.refreshToken) return null;
 
   const result = await refreshIdTokenWithRefreshToken({
@@ -89,7 +89,7 @@ async function refreshRow(
   });
   if (!result.ok) {
     console.warn(
-      `[firebase-pink-login.store] Refresh failed for ${key}: ${result.message}`
+      `[firebase-blue-login.store] Refresh failed for ${key}: ${result.message}`
     );
     if (result.status === 400 || result.status === 401 || result.status === 403) {
       bySupabaseUserId.delete(key);
@@ -100,7 +100,7 @@ async function refreshRow(
   const idToken = result.data.id_token?.trim();
   if (!idToken) return null;
 
-  const next: FirebasePinkIdentityForUser = {
+  const next: FirebaseBlueIdentityForUser = {
     idToken,
     storedAt: new Date().toISOString(),
     sessionValidUntil: row.sessionValidUntil,
@@ -114,23 +114,23 @@ async function refreshRow(
   return next;
 }
 
-function rowIsExpiring(row: FirebasePinkIdentityForUser): boolean {
+function rowIsExpiring(row: FirebaseBlueIdentityForUser): boolean {
   if (row.expiresAt === undefined) return false;
   return row.expiresAt - REFRESH_SKEW_MS <= Date.now();
 }
 
-function rowSessionExpired(row: FirebasePinkIdentityForUser): boolean {
+function rowSessionExpired(row: FirebaseBlueIdentityForUser): boolean {
   return row.sessionValidUntil <= Date.now();
 }
 
 /**
- * Resolve the Firebase Pink idToken for the current Supabase user, refreshing it
+ * Resolve the Firebase Blue idToken for the current Supabase user, refreshing it
  * via the Secure Token API when within `REFRESH_SKEW_MS` of expiry (for up to
  * **4 hours** after login — `FIREBASE_STORED_SESSION_HOURS`).
  *
  * Returns `null` when not stored, when the 4-hour window elapsed, or when refresh failed.
  */
-export async function getFirebasePinkIdTokenForSupabaseUser(
+export async function getFirebaseBlueIdTokenForSupabaseUser(
   supabaseUserId: string
 ): Promise<string | null> {
   const key = supabaseUserId.trim();
@@ -141,7 +141,7 @@ export async function getFirebasePinkIdTokenForSupabaseUser(
   if (rowSessionExpired(row)) {
     bySupabaseUserId.delete(key);
     console.warn(
-      `[firebase-pink-login.store] Session expired after ${getFirebaseStoredSessionHours()}h for ${key} — login again.`
+      `[firebase-blue-login.store] Session expired after ${getFirebaseStoredSessionHours()}h for ${key} — login again.`
     );
     return null;
   }
@@ -166,7 +166,7 @@ export async function getFirebasePinkIdTokenForSupabaseUser(
   return latest.idToken;
 }
 
-/** Supabase user ids with a stored Pink session (no tokens exposed). */
-export function listSupabaseUserIdsWithFirebasePinkIdentity(): readonly string[] {
+/** Supabase user ids with a stored Blue session (no tokens exposed). */
+export function listSupabaseUserIdsWithFirebaseBlueIdentity(): readonly string[] {
   return [...bySupabaseUserId.keys()];
 }

@@ -33,8 +33,8 @@
  *
  * Identity Toolkit idTokens expire ~1 hour after issuance. The accompanying long-lived
  * `refreshToken` is stored here and exchanged via `firebase-identity-toolkit-refresh.service`
- * a few minutes before expiry, so a long-lived Supabase session keeps working without
- * re-prompting for a password.
+ * a few minutes before expiry, for up to **4 hours** after login (see
+ * `FIREBASE_STORED_SESSION_HOURS` / `firebase-stored-session.config.ts`).
  *
  * ## Limits
  *
@@ -45,6 +45,10 @@
  */
 
 import { refreshIdTokenWithRefreshToken } from "./firebase-identity-toolkit-refresh.service.js";
+import {
+  firebaseStoredSessionValidUntil,
+  getFirebaseStoredSessionHours,
+} from "./firebase-stored-session.config.js";
 
 /** One cached Firebase Black session for a single Supabase Auth user. */
 export type FirebaseBlackIdentityForUser = {
@@ -54,6 +58,8 @@ export type FirebaseBlackIdentityForUser = {
   refreshToken?: string | undefined;
   /** Epoch ms when the cached idToken expires (Identity Toolkit `expiresIn`). */
   expiresAt?: number | undefined;
+  /** Epoch ms — stop auto-refresh and drop row after this (default 4h from login). */
+  sessionValidUntil: number;
   /** ISO timestamp when this row was last written (login or refresh). */
   storedAt: string;
   /** Optional email copy for troubleshooting (not used for lookup). */
@@ -111,6 +117,7 @@ export function rememberFirebaseBlackIdentityForUser(entry: {
   const row: FirebaseBlackIdentityForUser = {
     idToken: idToken.trim(),
     storedAt: new Date().toISOString(),
+    sessionValidUntil: firebaseStoredSessionValidUntil(),
   };
   const trimmedRefresh = refreshToken?.trim();
   if (trimmedRefresh) row.refreshToken = trimmedRefresh;
@@ -152,6 +159,7 @@ async function refreshRow(
   const next: FirebaseBlackIdentityForUser = {
     idToken,
     storedAt: new Date().toISOString(),
+    sessionValidUntil: row.sessionValidUntil,
   };
   const newRefresh = result.data.refresh_token?.trim() ?? row.refreshToken;
   if (newRefresh) next.refreshToken = newRefresh;
@@ -167,6 +175,10 @@ function rowIsExpiring(row: FirebaseBlackIdentityForUser): boolean {
   return row.expiresAt - REFRESH_SKEW_MS <= Date.now();
 }
 
+function rowSessionExpired(row: FirebaseBlackIdentityForUser): boolean {
+  return row.sessionValidUntil <= Date.now();
+}
+
 /**
  * Resolve the Firebase Black idToken to forward to BMS Black for the **current** request.
  *
@@ -175,9 +187,9 @@ function rowIsExpiring(row: FirebaseBlackIdentityForUser): boolean {
  * refresh round-trip.
  *
  * Returns `null` when there is no cached identity for this user (never logged in with the
- * Black Web API key set, or server restarted), or when a refresh attempt failed (e.g. the
- * password changed and the refresh token was revoked) — route responds **403** with
- * “sign in again” guidance.
+ * Black Web API key set, or server restarted), when the **4-hour** stored session window
+ * elapsed (`FIREBASE_STORED_SESSION_HOURS`), or when a refresh attempt failed — route
+ * responds **403** with “sign in again” guidance.
  *
  * @param supabaseUserId - From `res.locals.supabaseAuth.user.id`.
  */
@@ -188,6 +200,14 @@ export async function getFirebaseIdTokenForSupabaseUser(
   if (!key) return null;
   const row = bySupabaseUserId.get(key);
   if (!row) return null;
+
+  if (rowSessionExpired(row)) {
+    bySupabaseUserId.delete(key);
+    console.warn(
+      `[firebase-black-login.store] Session expired after ${getFirebaseStoredSessionHours()}h for ${key} — login again.`
+    );
+    return null;
+  }
 
   if (!rowIsExpiring(row)) return row.idToken;
 

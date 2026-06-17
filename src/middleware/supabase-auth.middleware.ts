@@ -7,6 +7,7 @@ import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
 } from "../db/supabase/supabase.client.js";
+import { resolveSupabaseAccessToken } from "../services/auth/supabase-session.store.js";
 
 export type SupabaseAuthLocals = {
   user: User;
@@ -62,11 +63,28 @@ export async function attachSupabaseUser(
   }
 
   try {
+    const resolved = await resolveSupabaseAccessToken(token);
+    if (!resolved.ok) {
+      const msg =
+        resolved.reason === "expired"
+          ? "Invalid or expired Supabase session — sign in again via POST /api/auth/login."
+          : "Invalid or expired Supabase session.";
+      res.status(401).json({ error: msg });
+      return;
+    }
+
+    if (resolved.refreshed) {
+      res.setHeader("X-Supabase-Access-Token", resolved.accessToken);
+      if (resolved.expiresAt !== undefined) {
+        res.setHeader("X-Supabase-Expires-At", String(resolved.expiresAt));
+      }
+    }
+
     const admin = createSupabaseClient(url, key);
     const {
       data: { user },
       error,
-    } = await admin.auth.getUser(token);
+    } = await admin.auth.getUser(resolved.accessToken);
 
     if (error || !user) {
       res.status(401).json({

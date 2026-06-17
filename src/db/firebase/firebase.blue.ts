@@ -4,7 +4,7 @@ import { resolveFirebaseServiceAccount } from "./firebase.helpers.js";
 
 let cached: admin.app.App | null | undefined;
 
-/** bmspro-blue — optional connectivity check only. */
+/** bmspro-trade (Blue) — Admin SDK for Auth + Firestore (e.g. `call_center_agents`). */
 export function getFirebaseBlueApp(): admin.app.App | null {
   if (cached !== undefined) return cached;
 
