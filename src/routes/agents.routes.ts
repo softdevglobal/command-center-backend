@@ -1,7 +1,5 @@
-import { createSupabaseClient } from "../db/supabase/supabase.client.js";
 import { Router, type Response } from "express";
 
-import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
 import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
@@ -58,7 +56,7 @@ function requireSupabaseConfig(
 
 function authEnvelope(auth: SuperAdminOrSetupAuth): Record<string, unknown> {
   if (auth.kind === "setup-secret") {
-    return { authMode: "x-setup-secret" as const };
+    return { authMode: "setup" as const };
   }
 
   return {
@@ -517,6 +515,11 @@ router.delete("/:id", async (req, res) => {
  * Query:   ?agentType=all|command-centre|workshop&limit=50&offset=0
  */
 router.post("/register", async (req, res) => {
+  const auth = await authorizeSuperAdminOrSetup(req, res, {
+    forbiddenMessage: "Forbidden",
+  });
+  if (!auth) return;
+
   const body = req.body as CreateAgentRequestBody;
 
   if (
@@ -531,14 +534,12 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const secret = req.headers["x-setup-secret"];
-  const setupExpected = process.env.SETUP_SECRET_KEY?.trim();
-  if (setupExpected && secret === setupExpected) {
-    try {
+  try {
+    if (auth.kind === "setup-secret") {
       const result = await registerAgentViaSetupSecret(body);
       res.status(200).json({
         success: true,
-        authMode: "x-setup-secret",
+        ...authEnvelope(auth),
         supabase: {
           userId: result.userId,
           agentId: result.agentId,
@@ -547,72 +548,18 @@ router.post("/register", async (req, res) => {
         firebasePink: { uid: result.firebasePinkUid },
         firebaseBlue: { uid: result.firebaseBlueUid },
       });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Registration failed";
-      res.status(400).json({ success: false, error: msg });
-    }
-    return;
-  }
-
-  const authHeader = req.headers.authorization ?? "";
-  const supabaseBearer = authHeader.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length).trim()
-    : "";
-
-  if (!supabaseBearer) {
-    res.status(401).json({
-      error:
-        "Missing auth: send Authorization: Bearer <Supabase access_token> from POST /api/auth/login (super admin), OR header x-setup-secret matching SETUP_SECRET_KEY for local bootstrap (same secret as POST /api/super-admin/register).",
-    });
-    return;
-  }
-
-  const url = getSupabaseProjectUrl();
-  const key = getSupabaseServiceRoleKey();
-  if (!url || !key) {
-    res.status(500).json({
-      error: "Supabase is not configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).",
-    });
-    return;
-  }
-
-  try {
-    const admin = createSupabaseClient(url, key);
-    const {
-      data: { user },
-      error: userErr,
-    } = await admin.auth.getUser(supabaseBearer);
-
-    if (userErr || !user) {
-      res.status(401).json({
-        error: userErr?.message ?? "Invalid or expired Supabase session.",
-      });
       return;
     }
 
-    const { data: roleRows } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id);
-
-    const roles = (roleRows ?? [])
-      .map((row: { role: string }) => row.role)
-      .filter(Boolean);
-
-    if (!roles.some((r) => roleMayRegisterAgents(r))) {
-      res.status(403).json({
-        error:
-          "Only super admins can register agents. Ensure user_roles.role matches SUPABASE_SUPER_ADMIN_ROLE or super_admin / admin.",
-      });
-      return;
-    }
-
-    const result = await registerAgent(body, { supabaseBearer });
+    const result = await registerAgent(body, {
+      supabaseBearer: (req.headers.authorization ?? "")
+        .replace(/^Bearer\s+/i, "")
+        .trim(),
+    });
 
     res.status(200).json({
       success: true,
-      authMode: "bearer",
-      authenticatedAs: sessionSummaryFromLocals({ user, roles }),
+      ...authEnvelope(auth),
       supabase: {
         userId: result.userId,
         agentId: result.agentId,

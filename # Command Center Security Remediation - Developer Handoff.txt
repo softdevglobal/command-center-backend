@@ -1,0 +1,613 @@
+﻿# Command Center Security Remediation - Developer Handoff
+
+
+Target app: https://commandcenter.bmspros.com.au/
+
+
+Purpose: Fix the security issues found during the authorized non-destructive external review of the Command Center app.
+
+
+Important: This document is vendor-neutral and must not include app-builder or third-party platform branding. Keep all production-facing fixes branded only as Command Center / BMS Pros where branding is required.
+
+
+## Executive Summary
+
+
+The app is generally rejecting unauthenticated API access correctly, but several production hardening gaps need fixing. The highest-risk issue is anonymous Supabase read access to `bms_bookings`, which exposed at least one booking record containing customer and vehicle-related fields.
+
+
+Fix priority:
+
+
+1. Critical: Lock down anonymous access to `bms_bookings`.
+2. High: Remove public `/api` route documentation.
+3. High: Remove public setup-secret disclosure.
+4. Medium: Add security headers to all SPA routes.
+5. Medium: Restrict CORS.
+6. Medium: Reduce public `/api/health/db` output.
+7. Medium: Review Supabase public signup.
+8. Medium: Authenticate before validating privileged payloads.
+9. Low / Medium: Clean sensitive-looking SPA catch-all paths.
+10. Low: Add a proper `/.well-known/security.txt`.
+
+
+## Scope Tested
+
+
+Public app routes:
+
+
+- `/`
+- `/login`
+- `/admin`
+- `/agent`
+- `/bookings/dashboard`
+- `/bookings/pending`
+- `/bookings/confirmed`
+- `/bookings/completed`
+- `/bookings/cancelled`
+
+
+Public checks performed:
+
+
+- Static app shell headers
+- Public JS bundle review
+- Unauthenticated GET endpoint checks from `/api`
+- Empty-body POST checks against state-changing endpoints
+- CORS preflight behavior
+- Supabase public publishable-key access
+- Public health endpoint behavior
+- Sensitive-looking path checks such as `/.env`, `/package.json`, and `/vercel.json`
+
+
+## 1. Critical - Lock Down Anonymous Supabase Access to `bms_bookings`
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Confirm Row Level Security is enabled on `bms_bookings`.
+- [ ] Remove or tighten any anonymous `SELECT` policy.
+- [ ] Ensure the anonymous role cannot read customer booking data.
+- [ ] Add narrow authenticated policies for the correct tenant, owner, branch, agent, or admin role.
+- [ ] Add a regression test for anonymous access.
+- [ ] Retest using the public Supabase publishable key.
+
+
+Why this matters:
+
+
+An unauthenticated request using the public Supabase key returned one `bms_bookings` row. The record shape included fields such as customer name, phone, email, vehicle number, booking date, booking time, owner UID, branch ID, and agent email.
+
+
+Real-life example:
+
+
+A stranger could write a simple script that queries bookings and learns who has a car booked in, when it is booked, how to contact the customer, and which workshop/agent is involved. That is personal information exposure.
+
+
+Best-practice fix:
+
+
+- Treat all booking records as private by default.
+- Use deny-by-default RLS.
+- Allow reads only through explicit tenant/role policies.
+- Never rely on the frontend to hide records.
+
+
+Verification command:
+
+
+```bash
+curl "https://<supabase-project>.supabase.co/rest/v1/bms_bookings?select=*&limit=1" \
+  -H "apikey: <publishable-key>" \
+  -H "Authorization: Bearer <publishable-key>"
+```
+
+
+Expected result:
+
+
+```json
+[]
+```
+
+
+## 2. High - Remove Public `/api` Route Documentation
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Remove the route catalogue from unauthenticated `GET /api`.
+- [ ] Replace it with a minimal production-safe response.
+- [ ] Move full API documentation behind admin authentication or into private developer docs.
+- [ ] Confirm `/api` no longer exposes endpoint names, auth mechanisms, setup routes, Firebase references, webhook names, or internal proxy details.
+
+
+Why this matters:
+
+
+`GET /api` currently exposes a full backend route map. It describes agent management, bookings, SMS, webhooks, audit logs, admin routes, setup-secret behavior, Firebase integrations, and proxy endpoints.
+
+
+Real-life example:
+
+
+An attacker does not need to guess the backend structure. The app currently hands them a map of what exists and how it is meant to be called.
+
+
+Best-practice fix:
+
+
+Return one of these:
+
+
+```json
+{"ok":true}
+```
+
+
+or:
+
+
+```json
+{"error":"Unauthorized"}
+```
+
+
+Verification command:
+
+
+```bash
+curl -i https://commandcenter.bmspros.com.au/api
+```
+
+
+Expected result:
+
+
+No public route catalogue.
+
+
+## 3. High - Remove Setup-Secret Disclosure
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Remove public mentions of `SETUP_SECRET_KEY`.
+- [ ] Remove public mentions of `x-setup-secret`.
+- [ ] Update `/api/super-admin/register` to return generic `403 Forbidden`.
+- [ ] Update admin/agent setup endpoints to avoid describing secret-header fallback auth.
+- [ ] Rotate setup secret if it may have been shared in logs, screenshots, repo history, or support messages.
+- [ ] Disable setup-secret auth after bootstrap if it is no longer required.
+
+
+Why this matters:
+
+
+The app publicly discloses that a setup secret header can unlock privileged setup behavior.
+
+
+Observed unauthenticated response:
+
+
+```json
+{"error":"Forbidden ? set SETUP_SECRET_KEY in .env and send header x-setup-secret with the same value."}
+```
+
+
+Real-life example:
+
+
+If someone later leaks the setup secret in a screenshot or deployment log, an attacker already knows the exact header name and purpose.
+
+
+Best-practice fix:
+
+
+Unauthenticated callers should see only:
+
+
+```json
+{"error":"Forbidden"}
+```
+
+
+or:
+
+
+```json
+{"error":"Unauthorized"}
+```
+
+
+## 4. Medium - Add Security Headers to SPA Routes
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Add `Content-Security-Policy`.
+- [ ] Add `X-Content-Type-Options: nosniff`.
+- [ ] Add `Referrer-Policy`.
+- [ ] Add `Permissions-Policy`.
+- [ ] Add frame protection through CSP `frame-ancestors 'none'` or equivalent.
+- [ ] Add `Cross-Origin-Opener-Policy` where compatible.
+- [ ] Add `Cross-Origin-Resource-Policy` where compatible.
+- [ ] Confirm headers apply to `/`, `/login`, `/admin`, `/agent`, and booking routes.
+
+
+Why this matters:
+
+
+The static SPA routes currently have HSTS, but are missing several browser security headers.
+
+
+Real-life example:
+
+
+If a future XSS bug appears, a strong Content Security Policy can reduce the chance of token theft or data exfiltration. Without CSP, injected JavaScript has more room to operate.
+
+
+Suggested baseline:
+
+
+```text
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+```
+
+
+Note: Tune CSP to match real app requirements before enforcing.
+
+
+Verification command:
+
+
+```bash
+curl -I https://commandcenter.bmspros.com.au/agent
+```
+
+
+Expected result:
+
+
+The response includes the security headers above or approved equivalents.
+
+
+## 5. Medium - Restrict CORS
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Replace `Access-Control-Allow-Origin: *` on API responses with an allowlist.
+- [ ] Allow production origins only, such as `https://commandcenter.bmspros.com.au`.
+- [ ] Keep staging/local origins environment-specific.
+- [ ] Do not reflect arbitrary origins.
+- [ ] Confirm preflight requests from untrusted origins are rejected.
+
+
+Why this matters:
+
+
+CORS is not authentication, but broad CORS makes browser-based attack chains easier if a token is exposed or mishandled.
+
+
+Real-life example:
+
+
+A malicious website could attempt browser requests against Command Center APIs from another origin. Auth should still block it, but broad CORS lowers the friction for chained attacks.
+
+
+Verification command:
+
+
+```bash
+curl -i -X OPTIONS https://commandcenter.bmspros.com.au/api/auth/login \
+  -H "Origin: https://example-attacker-site.test" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: authorization,content-type"
+```
+
+
+Expected result:
+
+
+The untrusted origin is not allowed.
+
+
+## 6. Medium - Reduce Public `/api/health/db` Output
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Remove detailed Supabase and Firebase dependency information from unauthenticated `GET /api/health/db`.
+- [ ] Keep detailed dependency health behind admin auth or internal monitoring.
+- [ ] Return only a minimal public health response if needed.
+
+
+Why this matters:
+
+
+The endpoint publicly reports that Supabase Auth is reachable and that Firebase Black/Pink Admin plus Firestore are configured and reachable.
+
+
+Real-life example:
+
+
+An attacker learns which backend systems are connected and can prioritize Supabase Auth, Firebase, and Firestore-specific attack research.
+
+
+Best-practice public response:
+
+
+```json
+{"ok":true}
+```
+
+
+or require authentication:
+
+
+```json
+{"error":"Unauthorized"}
+```
+
+
+Verification command:
+
+
+```bash
+curl -i https://commandcenter.bmspros.com.au/api/health/db
+```
+
+
+## 7. Medium - Review Supabase Public Signup
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Check Supabase Auth settings.
+- [ ] Disable public signup if accounts must be admin-created.
+- [ ] If signup is required, implement invite-only or approval workflow.
+- [ ] Ensure new users receive no role, tenant, or data access until approved.
+- [ ] Monitor account creation events.
+
+
+Why this matters:
+
+
+Supabase settings reported `disable_signup: false`.
+
+
+Real-life example:
+
+
+Even if the Command Center UI does not show a signup form, a public Supabase Auth API may allow account creation. If role assignment has any weakness, that account can become a foothold.
+
+
+Best-practice state:
+
+
+```text
+Public signup disabled, or signup requires invitation/admin approval.
+```
+
+
+Do not test by creating production accounts unless explicitly approved.
+
+
+## 8. Medium - Authenticate Before Privileged Payload Validation
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Move auth checks before payload validation on privileged endpoints.
+- [ ] Apply this to `/api/agents/register`.
+- [ ] Apply this to `/api/super-admin/register`.
+- [ ] Keep detailed validation messages only for authenticated and authorized callers.
+
+
+Why this matters:
+
+
+Some endpoints reveal payload requirements before the caller is authenticated.
+
+
+Observed example:
+
+
+```json
+{"error":"name, email, phone, and password are required"}
+```
+
+
+Real-life example:
+
+
+An attacker can learn the account creation payload shape without logging in. That makes automated probing easier.
+
+
+Expected unauthenticated response:
+
+
+```json
+{"error":"Unauthorized"}
+```
+
+
+## 9. Low / Medium - Review Sensitive-Looking SPA Catch-All Paths
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Decide whether `/.env`, `/.env.local`, `/package.json`, `/vercel.json`, `/src/main.tsx`, and similar paths should return `404` instead of SPA HTML.
+- [ ] Add explicit deny/404 rules if preferred.
+- [ ] Confirm no raw source/config files are deployed into public assets.
+
+
+Why this matters:
+
+
+These paths returned SPA HTML, not secrets. That is not a direct leak, but the `200 OK` can create scanner noise and confusion.
+
+
+Real-life example:
+
+
+A scanner may report `/.env` as accessible because it gets `200 OK`, even though the body is only the app shell. Explicit `404` responses reduce false positives.
+
+
+## 10. Low - Add `/.well-known/security.txt`
+
+
+Status: Not done
+
+
+Developer tasks:
+
+
+- [ ] Create `/.well-known/security.txt`.
+- [ ] Return it as `text/plain`.
+- [ ] Include a monitored security contact.
+- [ ] Ensure it does not return SPA HTML.
+
+
+Why this matters:
+
+
+Good-faith researchers need a reliable place to report security issues.
+
+
+Example:
+
+
+```text
+Contact: mailto:security@bmspros.com.au
+Preferred-Languages: en
+Canonical: https://commandcenter.bmspros.com.au/.well-known/security.txt
+Expires: 2027-08-13T00:00:00Z
+```
+
+
+## Positive Findings
+
+
+These should be preserved:
+
+
+- Most unauthenticated GET API routes returned `401 Unauthorized`.
+- Most unauthenticated state-changing POST routes returned `401 Unauthorized`.
+- No service-role Supabase key was found in the public bundles during this pass.
+- Sensitive-looking file paths returned SPA HTML rather than raw `.env` or source files.
+- HSTS is present.
+
+
+## Evidence Files
+
+
+Local evidence files from the review:
+
+
+- `full-app-get-endpoint-check.csv`
+- `full-app-post-empty-check.csv`
+- `full-app-supabase-anon-check.csv`
+- `Command-Center-Security-Remediation-Checklist.md`
+
+
+## Definition of Done
+
+
+- [ ] Anonymous Supabase access to `bms_bookings` returns no customer data.
+- [ ] `/api` no longer exposes route documentation publicly.
+- [ ] Public responses no longer mention `SETUP_SECRET_KEY` or `x-setup-secret`.
+- [ ] SPA routes return approved security headers.
+- [ ] API CORS is restricted to approved origins.
+- [ ] `/api/health/db` is minimal or authenticated.
+- [ ] Supabase signup is disabled or invite/approval controlled.
+- [ ] Privileged routes authenticate before detailed validation.
+- [ ] Sensitive-looking unknown paths return approved behavior.
+- [ ] `/.well-known/security.txt` is valid and reachable.
+- [ ] Retest evidence has been recorded.
+
+
+## Retest Commands
+
+
+```bash
+curl -I https://commandcenter.bmspros.com.au/
+curl -I https://commandcenter.bmspros.com.au/agent
+curl -i https://commandcenter.bmspros.com.au/api
+curl -i https://commandcenter.bmspros.com.au/api/health/db
+curl -i https://commandcenter.bmspros.com.au/api/agents
+curl -i -X POST https://commandcenter.bmspros.com.au/api/super-admin/register -H "Content-Type: application/json" --data '{}'
+curl -i -X POST https://commandcenter.bmspros.com.au/api/agents/register -H "Content-Type: application/json" --data '{}'
+curl -i https://commandcenter.bmspros.com.au/.well-known/security.txt
+```
+
+
+Supabase RLS retest:
+
+
+```bash
+curl "https://<supabase-project>.supabase.co/rest/v1/bms_bookings?select=*&limit=1" \
+  -H "apikey: <publishable-key>" \
+  -H "Authorization: Bearer <publishable-key>"
+```
+
+
+Expected:
+
+
+```json
+[]
+```
+
+
+## Developer Notes
+
+
+- Do not add third-party builder branding anywhere in the app, documents, headers, metadata, or public responses.
+- Keep production errors generic.
+- Keep detailed diagnostics in authenticated admin views or server logs.
+- Prefer role-based auth and tenant-aware database policies over shared static secrets.
+- Treat all booking, SMS, call, customer, vehicle, and staff data as private.

@@ -3,7 +3,7 @@ import {
   getInspectionRequestByIdInFirestore,
   listInspectionRequestsByBusinessIdInFirestore,
   listInspectionRequestsInFirestore,
-} from "./firestore/inspection-requests.firestore.service.js";
+} from "./firestore/requests.firestore.service.js";
 import type {
   InspectionRequestCreateInput,
   InspectionRequestListOptions,
