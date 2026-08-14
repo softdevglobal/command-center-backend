@@ -42,7 +42,7 @@ function requireSupabaseConfig(
 
 function authEnvelope(auth: SuperAdminOrSetupAuth): Record<string, unknown> {
   if (auth.kind === "setup-secret") {
-    return { authMode: "x-setup-secret" as const };
+    return { authMode: "setup" as const };
   }
 
   return {

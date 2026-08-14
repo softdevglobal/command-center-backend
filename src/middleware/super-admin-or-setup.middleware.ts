@@ -3,6 +3,7 @@ import { createSupabaseClient } from "../db/supabase/supabase.client.js";
 import type { NextFunction, Request, Response } from "express";
 
 import { roleMayRegisterAgents } from "../config/supabase-app-role.js";
+import { matchesSetupSecret } from "../config/setup-secret.js";
 import {
   getSupabaseProjectUrl,
   getSupabaseServiceRoleKey,
@@ -13,17 +14,15 @@ export type SuperAdminOrSetupAuth =
   | { kind: "bearer"; user: User; roles: string[] };
 
 /**
- * Same contract as agent registration / DID mappings:
- * `x-setup-secret` when SETUP_SECRET_KEY is set, or super-admin Bearer JWT.
+ * Setup-secret bootstrap (when enabled) or super-admin Bearer JWT.
+ * Public error bodies stay generic — no secret header or env var names.
  */
 export async function authorizeSuperAdminOrSetup(
   req: Request,
   res: Response,
   options?: { forbiddenMessage?: string }
 ): Promise<SuperAdminOrSetupAuth | null> {
-  const secret = req.headers["x-setup-secret"];
-  const setupExpected = process.env.SETUP_SECRET_KEY?.trim();
-  if (setupExpected && secret === setupExpected) {
+  if (matchesSetupSecret(req)) {
     return { kind: "setup-secret" };
   }
 
@@ -33,10 +32,7 @@ export async function authorizeSuperAdminOrSetup(
     : "";
 
   if (!token) {
-    res.status(401).json({
-      error:
-        "Missing auth: send Authorization: Bearer <Supabase access_token> from POST /api/auth/login (super admin), OR header x-setup-secret matching SETUP_SECRET_KEY.",
-    });
+    res.status(401).json({ error: "Unauthorized" });
     return null;
   }
 
@@ -44,7 +40,7 @@ export async function authorizeSuperAdminOrSetup(
   const key = getSupabaseServiceRoleKey();
   if (!url || !key) {
     res.status(500).json({
-      error: "Supabase is not configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).",
+      error: "Supabase is not configured.",
     });
     return null;
   }
@@ -57,9 +53,7 @@ export async function authorizeSuperAdminOrSetup(
     } = await admin.auth.getUser(token);
 
     if (userErr || !user) {
-      res.status(401).json({
-        error: userErr?.message ?? "Invalid or expired Supabase session.",
-      });
+      res.status(401).json({ error: "Unauthorized" });
       return null;
     }
 
@@ -74,16 +68,14 @@ export async function authorizeSuperAdminOrSetup(
 
     if (!roles.some((r) => roleMayRegisterAgents(r))) {
       res.status(403).json({
-        error:
-          options?.forbiddenMessage ??
-          "Only super admins may access this resource. Ensure user_roles.role matches SUPABASE_SUPER_ADMIN_ROLE or super_admin / admin.",
+        error: options?.forbiddenMessage ?? "Forbidden",
       });
       return null;
     }
 
     return { kind: "bearer", user, roles };
   } catch {
-    res.status(401).json({ error: "Invalid or expired Supabase session." });
+    res.status(401).json({ error: "Unauthorized" });
     return null;
   }
 }

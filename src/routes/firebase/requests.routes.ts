@@ -7,7 +7,7 @@ import {
   getInspectionRequestById,
   listInspectionRequestsByBusinessId,
   listInspectionRequests,
-} from "../../services/inspection-requests.service.js";
+} from "../../services/requests.service.js";
 import type { InspectionRequestCreateInput } from "../../types/inspection-request.types.js";
 
 const router = Router();
@@ -50,8 +50,8 @@ function authExtras(res: import("express").Response) {
 }
 
 /**
- * GET /api/inspection-requests
- * All documents from Firestore `inspection_requests` (bmspro-trade). Optional ?limit=&offset=
+ * GET /api/requests
+ * All documents from Firestore `requests` (bmspro-trade). Optional ?limit=&offset=
  */
 router.get("/", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -74,14 +74,14 @@ router.get("/", async (req, res) => {
     });
   } catch (e) {
     const msg =
-      e instanceof Error ? e.message : "Failed to list inspection requests";
+      e instanceof Error ? e.message : "Failed to list requests";
     res.status(500).json({ success: false, error: msg });
   }
 });
 
 /**
- * POST /api/inspection-requests
- * Create a Firestore `inspection_requests` document with auto-generated id/timestamps.
+ * POST /api/requests
+ * Create a Firestore `requests` document with auto-generated id/timestamps.
  */
 router.post("/", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -114,14 +114,14 @@ router.post("/", async (req, res) => {
     });
   } catch (e) {
     const msg =
-      e instanceof Error ? e.message : "Failed to create inspection request";
+      e instanceof Error ? e.message : "Failed to create request";
     res.status(errorStatus(e, 400)).json({ success: false, error: msg });
   }
 });
 
 /**
- * GET /api/inspection-requests/businesses/:businessId
- * Inspection requests for one business id from Firestore `inspection_requests`.
+ * GET /api/requests/businesses/:businessId
+ * Requests for one business id from Firestore `requests`.
  * Optional ?limit=&offset=
  */
 router.get("/businesses/:businessId", async (req, res) => {
@@ -157,14 +157,14 @@ router.get("/businesses/:businessId", async (req, res) => {
     const msg =
       e instanceof Error
         ? e.message
-        : "Failed to list business inspection requests";
+        : "Failed to list business requests";
     res.status(errorStatus(e, 500)).json({ success: false, error: msg });
   }
 });
 
 /**
- * POST /api/inspection-requests/businesses/:businessId
- * Create a Firestore `inspection_requests` document for one business id.
+ * POST /api/requests/businesses/:businessId
+ * Create a Firestore `requests` document for one business id.
  */
 router.post("/businesses/:businessId", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -217,13 +217,13 @@ router.post("/businesses/:businessId", async (req, res) => {
     });
   } catch (e) {
     const msg =
-      e instanceof Error ? e.message : "Failed to create inspection request";
+      e instanceof Error ? e.message : "Failed to create request";
     res.status(errorStatus(e, 400)).json({ success: false, error: msg });
   }
 });
 
 /**
- * GET /api/inspection-requests/:id
+ * GET /api/requests/:id
  */
 router.get("/:id", async (req, res) => {
   if (!res.locals.supabaseAuth) {
@@ -233,14 +233,14 @@ router.get("/:id", async (req, res) => {
 
   const id = paramId(req.params.id);
   if (!id) {
-    res.status(400).json({ success: false, error: "Inspection request id is required." });
+    res.status(400).json({ success: false, error: "Request id is required." });
     return;
   }
 
   try {
     const row = await getInspectionRequestById(id);
     if (!row) {
-      res.status(404).json({ success: false, error: "Inspection request not found." });
+      res.status(404).json({ success: false, error: "Request not found." });
       return;
     }
 
@@ -251,7 +251,7 @@ router.get("/:id", async (req, res) => {
     });
   } catch (e) {
     const msg =
-      e instanceof Error ? e.message : "Failed to load inspection request";
+      e instanceof Error ? e.message : "Failed to load request";
     res.status(500).json({ success: false, error: msg });
   }
 });

@@ -56,7 +56,7 @@ function parseListFilters(req: {
 function authExtras(res: import("express").Response) {
   const auth = res.locals.superAdminAuth;
   if (!auth || auth.kind === "setup-secret") {
-    return { authMode: "x-setup-secret" as const };
+    return { authMode: "setup" as const };
   }
   return {
     authMode: "bearer" as const,

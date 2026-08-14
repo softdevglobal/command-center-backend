@@ -20,7 +20,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log("      (Port 5000 is AirPlay/ControlCenter and returns 403.)");
   console.log("");
   console.log("  --- Postman / local testing ---");
-  console.log(`  GET  ${postmanBase}/api           (should return JSON with listen.port = ${PORT})`);
+  console.log(`  GET  ${postmanBase}/api           → {"ok":true}`);
   console.log(`  POST ${postmanBase}/api/auth/login`);
   console.log("");
 });
