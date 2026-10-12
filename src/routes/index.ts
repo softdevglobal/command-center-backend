@@ -33,6 +33,9 @@ import requestsRoutes from "./firebase/requests.routes.js";
 import businessRoutes from "./firebase/business.routes.js";
 import invoicesRoutes from "./firebase/invoices.routes.js";
 import superAdminRoutes from "./super-admin.routes.js";
+import aiMockVoiceRoutes from "./ai/mock-voice.routes.js";
+import yeastarMcpRoutes from "./ai/yeastar-mcp.routes.js";
+import aiAgentAdminRoutes from "./ai/ai-agent-admin.routes.js";
 
 const router = Router();
 
@@ -70,6 +73,9 @@ router.use("/bms-black", bmsBlackCallCenterServicesRoutes);
 router.use("/bms-black", bmsBlackCallCenterBranchRoutes);
 router.use("/bms-black", bmsBlackAgentActivityRoutes);
 router.use("/bms-blue", bmsBlueSupportChatRoutes);
+router.use("/ai/mock/voice", aiMockVoiceRoutes);
+router.use("/ai/mcp/black", yeastarMcpRoutes);
+router.use("/super-admin/ai-agents", aiAgentAdminRoutes);
 
 /** Public health — ok flag only. */
 router.get("/health/db", async (_req, res) => {
