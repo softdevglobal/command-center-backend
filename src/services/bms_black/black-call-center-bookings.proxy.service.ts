@@ -33,6 +33,7 @@ export async function proxyBlackCallCenterBookingAvailability(
   return blackCallCenterFetch(path, firebaseIdToken, {
     method: "GET",
     tenantId,
+    signal: AbortSignal.timeout(15000),
   });
 }
 
