@@ -8,6 +8,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { getDidMappingByDid } from "../../services/did-mappings.service.js";
 import type { FrontOfficeBrandAdapter, FrontOfficeTenantContext } from "../../services/ai/brand-adapter.js";
 import { blackFrontOfficeAdapter } from "../../services/ai/black-front-office.adapter.js";
+import { availabilityArguments, bookingArguments, createFrontOfficeBookingTools } from "../../services/ai/front-office-booking.service.js";
 
 type TenantConfiguration = {
   did: string;
@@ -150,6 +151,7 @@ function createMcpSession(configuration: TenantConfiguration): McpSession {
   const adapter = adapters[configuration.brand];
   if (!adapter) throw new Error(`No front-office adapter is registered for ${configuration.brand}.`);
   const server = new McpServer({ name: "bmspro-black-front-office", version: "1.0.0" });
+  const bookingTools = createFrontOfficeBookingTools(adapter, () => resolveCurrentTenant(configuration));
 
   server.tool(
     "get_workshop_profile",
@@ -182,6 +184,18 @@ function createMcpSession(configuration: TenantConfiguration): McpSession {
     },
   );
 
+  server.tool("get_available_slots",
+    "Get available DROP-OFF times for the assigned Black workshop branch and selected services. These are not exclusive mechanic appointments. Use the returned branch timezone and slotToken. Staff approval is required for a booking.",
+    availabilityArguments.shape,
+    async args => textResult(await bookingTools.getAvailableSlots(args)),
+  );
+  if (process.env.AI_MCP_BOOKINGS_ENABLED === "true") {
+    server.tool("create_booking",
+      "Submit a Black booking request for STAFF APPROVAL. Use a slotToken from get_available_slots. Collect the customer's name, email and phone, read back the service, branch, date and local drop-off time, and get explicit confirmation. Say submitted for approval only for PENDING_REVIEW. Never say confirmed. Reuse the same details on retries; transfer to staff for UNKNOWN/PROCESSING results.",
+      bookingArguments.shape,
+      async args => textResult(await bookingTools.createBooking(args)),
+    );
+  }
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized(sessionId) {
