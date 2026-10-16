@@ -206,8 +206,7 @@ command-center-backend/
 │  ├─ db/
 │  │  ├─ startup-status.ts        ← printStartupDatabaseStatus()
 │  │  ├─ supabase/
-│  │  │  ├─ supabase.client.ts    ← createSupabaseClient(), key resolution helpers
-│  │  │  └─ supabase.repository.ts← re-export of client
+│  │  │  └─ supabase.client.ts    ← createSupabaseClient(), key resolution helpers
 │  │  └─ firebase/
 │  │     ├─ firebase.helpers.ts   ← resolveFirebaseServiceAccount("BLACK"|"PINK"|"BLUE")
 │  │     ├─ firebase.black.ts     ← getFirebaseBlackApp()  (bmspro-black)
@@ -267,8 +266,7 @@ command-center-backend/
 │  │  │  ├─ black-call-center-staff.proxy.service.ts
 │  │  │  ├─ black-call-center-services.proxy.service.ts
 │  │  │  ├─ black-call-center-branches.proxy.service.ts
-│  │  │  ├─ black-call-center-notifications.proxy.service.ts
-│  │  │  └─ firebase-token-from-black.service.ts
+│  │  │  └─ black-call-center-notifications.proxy.service.ts
 │  │  ├─ shared/
 │  │  │  ├─ *.pipeline.ts                            ← env gate + delegation per feature
 │  │  │  └─ supabase-*.service.ts                    ← low-level table queries
@@ -1175,13 +1173,6 @@ flowchart LR
 | Firebase‑only | e.g. `GET /getallbooking`, notifications, some chats | Not required (sent only when explicitly passed). |
 | Tenant‑scoped | most bookings, services, branches, staff | **Required** on the incoming request; forwarded upstream. |
 
-### Reverse direction — `firebase-token-from-black.service.ts`
-
-A separate, non‑proxy helper: it `POST`s the **Supabase** Bearer to
-`{BLACK_API_BASE_URL}/api/call-center/supabase/firebase-token` and gets back a Firebase
-**custom token** (`{ firebaseCustomToken, uid, expiresIn }`) the client could use with
-`signInWithCustomToken`. It returns `null` on failure and is non‑blocking at login.
-
 ---
 
 ## 17. The service / pipeline pattern
@@ -1220,9 +1211,10 @@ Pipelines (in `src/services/shared/`):
 | `sales-suburb-workshops.pipeline.ts` | `sales_suburb_workshops`, `sales_agent_suburb_assignments` |
 | `sales-agent-suburb-assignments.pipeline.ts` | `sales_agent_suburb_assignments` |
 | `sales-suburb-workshop-agent-contacts.pipeline.ts` | `sales_suburb_workshop_agent_contact` |
-| `register-agent.pipeline.ts` | Supabase Auth, `user_roles`, `agents`, `tenants` |
 
 Exceptions: `sms.service.ts` and the dashboard metrics service talk to Supabase directly.
+Agent registration uses `agent-register.service.ts` and
+`auth/register-command-center-agent-supabase.service.ts`, followed by Firebase provisioning.
 
 > Domain shapes live in `src/types/` (not `src/models/`). The `dist/models/**` files are empty
 > leftover stubs and are not used.

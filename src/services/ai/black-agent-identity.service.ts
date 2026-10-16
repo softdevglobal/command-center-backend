@@ -1,6 +1,8 @@
 import admin from "firebase-admin";
 
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
+import { aiAgentUid } from "./black-ai-agent-provisioning.service.js";
+import { getDidMappingByDid } from "../did-mappings.service.js";
 
 type TenantCredential = {
   did: string;
@@ -19,7 +21,7 @@ const CUSTOM_TOKEN_EXCHANGE_URL = "https://identitytoolkit.googleapis.com/v1/acc
 
 function tenantCredentials(did: string): TenantCredential {
   const raw = process.env.AI_MCP_TENANT_CONFIG_JSON?.trim();
-  if (!raw) throw new Error("AI MCP tenant configuration is missing.");
+  if (!raw) return {did, blackAgentUid: aiAgentUid(did)};
 
   let entries: unknown;
   try {
@@ -35,7 +37,8 @@ function tenantCredentials(did: string): TenantCredential {
     return item.brand === "black" && item.did === did;
   }) as Record<string, unknown> | undefined;
 
-  if (!match || typeof match.blackAgentUid !== "string" || !match.blackAgentUid.trim()) {
+  if (!match) return {did, blackAgentUid: aiAgentUid(did)};
+  if (typeof match.blackAgentUid !== "string" || !match.blackAgentUid.trim()) {
     throw new Error("BMS Black receptionist agent UID is not configured for this DID.");
   }
   return { did, blackAgentUid: match.blackAgentUid.trim() };
@@ -55,7 +58,7 @@ function assignedWorkshopIds(value: unknown): string[] {
 }
 
 /** Verify the service identity is active and scoped to exactly this workshop. */
-async function assertAgentScope(uid: string, ownerId: string): Promise<admin.app.App> {
+async function assertAgentScope(uid: string, ownerId: string, did: string): Promise<admin.app.App> {
   const app = getFirebaseBlackApp();
   if (!app) throw new Error("Firebase Black Admin credentials are not configured.");
 
@@ -75,6 +78,13 @@ async function assertAgentScope(uid: string, ownerId: string): Promise<admin.app
   ) {
     throw new Error("BMS Black receptionist agent is inactive or not scoped to this workshop.");
   }
+  if (uid === aiAgentUid(did)) {
+    const mapping = await getDidMappingByDid(did);
+    if (!mapping?.branch_id || mapping.owner_id !== ownerId || data?.accountType !== "ai-front-office" ||
+        data.brand !== "black" || data.did !== did || data.ownerUid !== ownerId || data.branchId !== mapping.branch_id) {
+      throw new Error("This DID needs an active AI account assigned to its current workshop and branch.");
+    }
+  }
   return app;
 }
 
@@ -83,7 +93,7 @@ async function mintIdentity(did: string, ownerId: string): Promise<CachedIdentit
   const webApiKey = process.env.FIREBASE_BLACK_WEB_API_KEY?.trim();
   if (!webApiKey) throw new Error("Firebase Black sign-in is not configured.");
 
-  const app = await assertAgentScope(credential.blackAgentUid, ownerId);
+  const app = await assertAgentScope(credential.blackAgentUid, ownerId, did);
   const customToken = await admin.auth(app).createCustomToken(credential.blackAgentUid);
   const response = await fetch(`${CUSTOM_TOKEN_EXCHANGE_URL}?key=${encodeURIComponent(webApiKey)}`, {
     method: "POST",
@@ -114,20 +124,21 @@ export async function getBlackAgentIdToken(did: string, ownerId: string): Promis
   // Recheck the Firestore assignment before every use so stale or reassigned
   // service accounts cannot continue calling the Black API with a cached token.
   const credential = tenantCredentials(did);
-  await assertAgentScope(credential.blackAgentUid, ownerId);
+  await assertAgentScope(credential.blackAgentUid, ownerId, did);
 
-  const cached = identities.get(did);
+  const identityKey = JSON.stringify([did, ownerId, credential.blackAgentUid]);
+  const cached = identities.get(identityKey);
   if (cached && cached.expiresAt - REFRESH_SKEW_MS > Date.now()) return cached.idToken;
 
-  let pending = refreshes.get(did);
+  let pending = refreshes.get(identityKey);
   if (!pending) {
     pending = mintIdentity(did, ownerId)
       .then((next) => {
-        identities.set(did, next);
+        identities.set(identityKey, next);
         return next;
       })
-      .finally(() => refreshes.delete(did));
-    refreshes.set(did, pending);
+      .finally(() => refreshes.delete(identityKey));
+    refreshes.set(identityKey, pending);
   }
   return (await pending).idToken;
 }
