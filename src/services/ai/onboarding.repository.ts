@@ -4,6 +4,7 @@ import { provisionBlackAiAgent } from "./black-ai-agent-provisioning.service.js"
 import { createOnboardingService, OnboardingError, type OnboardingRecord, type OnboardingRepository } from "./onboarding.service.js";
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { provisionBlackBusiness } from "./black-business-provisioning.service.js";
+import { provisionTradeBusiness } from "./trade-business-provisioning.service.js";
 
 function database() {
   const url = getSupabaseProjectUrl();
@@ -35,7 +36,7 @@ const repository: OnboardingRepository = {
   },
 };
 
-export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness });
+export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness, provisionTradeBusiness });
 
 /** Voice sessions use a nominated existing platform operator, not a caller-selected principal. */
 export async function assertVoiceOnboardingOperator(operatorId: string): Promise<void> {
