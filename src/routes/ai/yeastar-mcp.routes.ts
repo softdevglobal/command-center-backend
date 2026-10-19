@@ -6,6 +6,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { getDidMappingByDid } from "../../services/did-mappings.service.js";
+import { aiAgentUid } from "../../services/ai/black-ai-agent-provisioning.service.js";
 import type { FrontOfficeBrandAdapter, FrontOfficeTenantContext } from "../../services/ai/brand-adapter.js";
 import { blackFrontOfficeAdapter } from "../../services/ai/black-front-office.adapter.js";
 import { availabilityArguments, bookingArguments, createFrontOfficeBookingTools } from "../../services/ai/front-office-booking.service.js";
@@ -101,9 +102,25 @@ function safeEqual(left: string, right: string): boolean {
   return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
 }
 
-function authenticateTenant(req: Request): TenantConfiguration | null {
+async function authenticateTenant(req: Request): Promise<TenantConfiguration | null> {
   const bearer = suppliedBearer(req);
   if (!bearer) return null;
+  const bridgeSecret = process.env.AI_VOICE_BRIDGE_SECRET?.trim();
+  if (bridgeSecret && bridgeSecret.length >= 32 && safeEqual(bridgeSecret, bearer)) {
+    if (loadTenantConfigurations().some(entry => safeEqual(entry.token, bridgeSecret))) {
+      throw new Error("The voice bridge credential must differ from per-tenant MCP credentials.");
+    }
+    const did = req.header("x-bmspro-did")?.trim() ?? "";
+    if (!/^\d{6,15}$/.test(did)) return null;
+    // Accept only an exact mapped number, allowing the optional international +.
+    // Never guess country codes or select the first of ambiguous mappings.
+    const matches = (await Promise.all([getDidMappingByDid(did), getDidMappingByDid(`+${did}`)]))
+      .filter(mapping => mapping?.tenant_id && mapping.owner_id && mapping.branch_id);
+    if (matches.length !== 1) return null;
+    const mapping = matches[0]!;
+    if (!mapping) return null;
+    return {did: mapping.did, token: bearer, brand: "black", blackAgentUid: aiAgentUid(mapping.did)};
+  }
   return loadTenantConfigurations().find((entry) => safeEqual(entry.token, bearer)) ?? null;
 }
 
@@ -162,6 +179,7 @@ function createMcpSession(configuration: TenantConfiguration): McpSession {
       const branch = await adapter.getBranch(context);
       return textResult({
         brand: adapter.brand,
+        did: context.did,
         workshopName: context.workshopName,
         branchName: context.branchName,
         branch,
@@ -243,7 +261,7 @@ async function handleMcpRequest(req: Request, res: Response): Promise<void> {
 
   let configuration: TenantConfiguration | null;
   try {
-    configuration = authenticateTenant(req);
+    configuration = await authenticateTenant(req);
   } catch (error) {
     console.error(`[ai mcp] Configuration error: ${error instanceof Error ? error.message : "unknown"}`);
     res.status(503).json({ error: "Yeastar AI tools are not configured." });
@@ -253,7 +271,7 @@ async function handleMcpRequest(req: Request, res: Response): Promise<void> {
     res.status(401).json({ error: "Invalid receptionist credential." });
     return;
   }
-  if (!allowRequest(configuration.token)) {
+  if (!allowRequest(`${configuration.token}:${configuration.did}`)) {
     res.status(429).json({ error: "Receptionist tool request limit reached." });
     return;
   }
@@ -288,7 +306,7 @@ async function handleMcpRequest(req: Request, res: Response): Promise<void> {
   }
 
   const session = sessions.get(sessionId);
-  if (!session || !safeEqual(session.configuration.token, configuration.token)) {
+  if (!session || session.configuration.did !== configuration.did || !safeEqual(session.configuration.token, configuration.token)) {
     res.status(404).json({ error: "MCP session not found." });
     return;
   }

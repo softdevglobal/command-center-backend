@@ -52,11 +52,12 @@ function publicSession(session: StoredSession): MockVoiceSession {
 export function createMockVoiceSession(
   tenant: MockVoiceTenantContext,
   now = Date.now(),
+  sessionId: string = randomUUID(),
 ): MockVoiceSession {
   removeExpiredSessions(now);
 
   const session: StoredSession = {
-    sessionId: randomUUID(),
+    sessionId,
     provider: "mock",
     simulated: true,
     status: "open",
