@@ -41,6 +41,7 @@ import aiAgentAdminRoutes from "./ai/ai-agent-admin.routes.js";
 import openAiLiveRoutes from "./ai/openai-live.routes.js";
 import { onboardingRouters } from "./ai/onboarding.routes.js";
 import onboardingCallRoutes from "./ai/onboarding-call.routes.js";
+import aiAgentActivityRoutes from "./ai/ai-agent-activity.routes.js";
 
 const router = Router();
 
@@ -80,6 +81,7 @@ router.use("/bms-black", bmsBlackAgentActivityRoutes);
 router.use("/bms-blue", bmsBlueSupportChatRoutes);
 router.use("/ai/mock/voice", aiMockVoiceRoutes);
 router.use("/ai/openai/live", openAiLiveRoutes);
+router.use("/ai/agent-activity", aiAgentActivityRoutes);
 router.use("/ai/mcp/black", yeastarMcpRoutes);
 router.use("/ai/mcp/trade", tradeMcpRoutes);
 router.use("/ai/mcp/route", voiceRouteRoutes);
