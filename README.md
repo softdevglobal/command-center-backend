@@ -183,6 +183,9 @@ flowchart TD
 
 ## 4. Repository layout (folders & files)
 
+AI onboarding setup, MCP tools, owner approval and provisioning boundaries are
+documented in [docs/ai-onboarding.md](docs/ai-onboarding.md).
+
 The authoritative source is under `src/`. The `dist/` directory contains compiled output and
 should not be edited by hand. (Note: some `dist/models/**` files exist from older builds but
 are empty stubs; the live code uses `src/types/` instead of `src/models/`.)

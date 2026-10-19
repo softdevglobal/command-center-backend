@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:ai": "node --import tsx --test tests/ai-agent-provisioning.test.ts tests/ai-booking-tools.test.ts tests/ai-voice-adapters.test.ts"
+    "test:ai": "node --import tsx --test tests/ai-agent-provisioning.test.ts tests/ai-booking-tools.test.ts tests/ai-voice-adapters.test.ts tests/ai-onboarding.test.ts"
   },
   "keywords": [],
   "author": "",

@@ -9,6 +9,12 @@ export class AiAgentSetupError extends Error {
 }
 
 type Identity = { uid: string; disabled: boolean };
+export type BlackAiAgentProvisioningInput = {
+  did: string;
+  name: string;
+  createdBy: string;
+  expectedAssignment?: { tenantId: string; ownerUid: string; branchId: string; queueId: string };
+};
 export type ProvisioningDependencies = {
   getMapping: (did: string) => Promise<DidMappingRow | null>;
   getAgent: (uid: string) => Promise<Record<string, unknown> | undefined>;
@@ -24,10 +30,15 @@ export function aiAgentUid(did: string): string {
 }
 
 export function createAiAgentProvisioner(deps: ProvisioningDependencies) {
-  return async (input: { did: string; name: string; createdBy: string }) => {
+  return async (input: BlackAiAgentProvisioningInput) => {
     const mapping = await deps.getMapping(input.did);
     if (!mapping?.tenant_id || !mapping.owner_id || !mapping.branch_id) {
       throw new AiAgentSetupError(400, "Select a phone number mapped to a workshop and branch first.");
+    }
+    const expected = input.expectedAssignment;
+    if (expected && (mapping.tenant_id !== expected.tenantId || mapping.owner_id !== expected.ownerUid ||
+        mapping.branch_id !== expected.branchId || mapping.queue_id !== expected.queueId)) {
+      throw new AiAgentSetupError(409, "The phone assignment changed after owner approval. Review the setup again.");
     }
     const uid = aiAgentUid(mapping.did);
     const existing = await deps.getAgent(uid);
@@ -84,8 +95,9 @@ function blackApp(): admin.app.App {
 
 const pending = new Map<string, Promise<Awaited<ReturnType<ReturnType<typeof createAiAgentProvisioner>>>>>();
 
-export async function provisionBlackAiAgent(input: { did: string; name: string; createdBy: string }) {
-  const current = pending.get(input.did);
+export async function provisionBlackAiAgent(input: BlackAiAgentProvisioningInput) {
+  const pendingKey = JSON.stringify([input.did, input.expectedAssignment ?? null]);
+  const current = pending.get(pendingKey);
   if (current) return current;
   const app = blackApp();
   const auth = admin.auth(app);
@@ -99,8 +111,8 @@ export async function provisionBlackAiAgent(input: { did: string; name: string; 
     createAgent: async (uid, data) => { await db.doc(`call_center_agents/${uid}`).create(data); },
     deleteUser: (uid) => auth.deleteUser(uid),
   });
-  const task = provision(input).finally(() => pending.delete(input.did));
-  pending.set(input.did, task);
+  const task = provision(input).finally(() => pending.delete(pendingKey));
+  pending.set(pendingKey, task);
   return task;
 }
 
