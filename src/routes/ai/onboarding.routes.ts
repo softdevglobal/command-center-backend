@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
+import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
 import { attachSupabaseUser, requireSupabaseSuperAdmin, type SupabaseAuthLocals } from "../../middleware/supabase-auth.middleware.js";
 import { onboardingService } from "../../services/ai/onboarding.repository.js";
 import { OnboardingError, type OnboardingService } from "../../services/ai/onboarding.service.js";
@@ -22,17 +23,19 @@ function publicError(error: unknown) {
   return { status: 500, code: "ONBOARDING_FAILED", error: "Onboarding could not complete. Check status before retrying." };
 }
 
-const verifyBlackOwner: RequestHandler = async (req, res, next) => {
+const verifyBusinessOwner: RequestHandler = async (req, res, next) => {
   const match = /^Bearer\s+(.+)$/i.exec(req.header("authorization") ?? "");
-  if (!match?.[1]) { res.status(401).json({ error: "Sign in using the Black business owner's account." }); return; }
-  const app = getFirebaseBlackApp();
-  if (!app) { res.status(503).json({ error: "Business owner verification is unavailable." }); return; }
-  try {
-    const decoded = await admin.auth(app).verifyIdToken(match[1], true);
-    res.locals.blackOwnerUid = decoded.uid;
-    res.locals.blackOwnerIdentity = { uid: decoded.uid, email: decoded.email, emailVerified: decoded.email_verified === true };
-    next();
-  } catch { res.status(401).json({ error: "The Black owner login is invalid or expired." }); }
+  if (!match?.[1]) { res.status(401).json({ error: "Sign in using the verified business owner's account." }); return; }
+  for (const app of [getFirebaseBlueApp(), getFirebaseBlackApp()]) {
+    if (!app) continue;
+    try {
+      const decoded = await admin.auth(app).verifyIdToken(match[1], true);
+      res.locals.onboardingOwnerIdentity = { uid: decoded.uid, email: decoded.email, emailVerified: decoded.email_verified === true };
+      next();
+      return;
+    } catch { /* A token from the other BMS Pro product may verify there. */ }
+  }
+  res.status(401).json({ error: "The business owner login is invalid or expired." });
 };
 
 /** Only these four tools are advertised; owner approval is never a model tool. */
@@ -83,11 +86,11 @@ export function createOnboardingRouters(options: {
   adminRoutes.post("/:draftId/submit", handle((req, res) => service.submitForReview(operator(res), onboardingVersionArguments.parse({ ...req.body, draftId: draftId(req) }))));
   adminRoutes.post("/:draftId/provision", handle((req, res) => service.provisionApprovedBusiness(operator(res), onboardingVersionArguments.parse({ ...req.body, draftId: draftId(req) }))));
 
-  ownerRoutes.use(enabled, options.authenticateOwner ?? verifyBlackOwner);
-  ownerRoutes.get("/:draftId/review", handle((req, res) => service.getOwnerReview(res.locals.blackOwnerIdentity ?? res.locals.blackOwnerUid, draftId(req))));
+  ownerRoutes.use(enabled, options.authenticateOwner ?? verifyBusinessOwner);
+  ownerRoutes.get("/:draftId/review", handle((req, res) => service.getOwnerReview(res.locals.onboardingOwnerIdentity ?? res.locals.blackOwnerIdentity ?? res.locals.blackOwnerUid, draftId(req))));
   ownerRoutes.post("/:draftId/approve", handle((req, res) => {
     const input = ownerApprovalArguments.parse({ ...req.body, draftId: draftId(req) });
-    return service.approveAsOwner(res.locals.blackOwnerIdentity ?? res.locals.blackOwnerUid, input);
+    return service.approveAsOwner(res.locals.onboardingOwnerIdentity ?? res.locals.blackOwnerIdentity ?? res.locals.blackOwnerUid, input);
   }));
 
   mcpRoutes.use(enabled, authenticateOperator, authorizeOperator);

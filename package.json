@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:ai": "node --import tsx --test tests/ai-agent-provisioning.test.ts tests/ai-booking-tools.test.ts tests/ai-voice-adapters.test.ts tests/ai-onboarding.test.ts"
+    "test:ai": "node --import tsx --test tests/ai-agent-provisioning.test.ts tests/ai-booking-tools.test.ts tests/ai-voice-adapters.test.ts tests/ai-onboarding.test.ts tests/ai-trade-mcp.test.ts tests/ai-voice-route.test.ts",
+    "check:trade": "node --import tsx scripts/check-trade-mcp.mjs"
   },
   "keywords": [],
   "author": "",

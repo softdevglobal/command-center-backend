@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { DidMappingRow } from "../../types/did-mapping.types.js";
 import type { BlackAiAgentProvisioningInput } from "./black-ai-agent-provisioning.service.js";
 import { blackEndpoint } from "../../config/black-api.js";
+import { tradeOwnerReviewUrl, type TradeBusinessResult } from "./trade-business-provisioning.service.js";
 import {
   missingOnboardingInformation, saveOnboardingArguments, onboardingVersionArguments, ownerApprovalArguments,
   type OnboardingConfiguration, type SaveOnboardingArguments, type OnboardingVersionArguments, type OwnerApprovalArguments,
@@ -15,7 +16,7 @@ export type ExistingOnboardingBinding = { did: string; tenantId: string; ownerUi
 export type OnboardingBinding = ExistingOnboardingBinding | { kind: "new_business"; ownerEmail: string };
 export type OnboardingApproval = { ownerUid: string; reviewedVersion: number; termsVersion: string; approvedAt: string; configurationHash?: string };
 export type BlackBusinessResult = { status: "TEST_MODE"; ownerUid: string; branchId: string; serviceIds: string[]; staffIds: string[]; created: boolean };
-export type OnboardingProvisioningResult = { firebaseBlackUid: string; did: string; name: string; created: boolean } | BlackBusinessResult;
+export type OnboardingProvisioningResult = { firebaseBlackUid: string; did: string; name: string; created: boolean } | BlackBusinessResult | TradeBusinessResult;
 export type OwnerIdentity = { uid: string; email?: string | null; emailVerified?: boolean };
 export type OnboardingRecord = {
   id: string;
@@ -41,6 +42,7 @@ export type OnboardingDependencies = {
   getMapping(did: string): Promise<DidMappingRow | null>;
   provision(input: BlackAiAgentProvisioningInput): Promise<OnboardingProvisioningResult>;
   provisionBlackBusiness?(input: { requestId: string; configuration: OnboardingConfiguration; configurationHash: string; approval: OnboardingApproval }): Promise<BlackBusinessResult>;
+  provisionTradeBusiness?(input: { requestId: string; configuration: OnboardingConfiguration; configurationHash: string; approval: OnboardingApproval }): Promise<TradeBusinessResult>;
   now?: () => Date;
 };
 
@@ -94,10 +96,12 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       configurationHash: row.configuration_hash, missingInformation: missingOnboardingInformation(row.configuration),
       binding: row.binding, approval: row.approval, provisioningResult: row.provisioning_result,
       updatedAt: row.updated_at, liveCallsActivated: false,
-      ownerReviewUrl: row.status !== "draft" ? blackEndpoint(`/onboarding/${row.id}`) : null,
-      nextAction: row.status === "provisioned" ? "Complete billing authorization, staff invitations, approved runtime settings and phone routing; run pilot checks and obtain launch approval."
-        : row.status === "owner_review" ? "The business owner must sign in, verify their email and approve this exact setup in Black."
-        : row.status === "approved" || row.status === "provisioning_failed" ? "Provision the approved Black business setup."
+      ownerReviewUrl: row.status !== "draft" ? row.configuration.product === "trade" ? tradeOwnerReviewUrl(row.id) : blackEndpoint(`/onboarding/${row.id}`) : null,
+      nextAction: row.status === "provisioned" ? row.configuration.product === "trade"
+          ? "The Trade business is pending review. Select a subscription plan, complete billing authorization, confirm service setup and approve launch before activating the account."
+          : "Complete billing authorization, staff invitations, approved runtime settings and phone routing; run pilot checks and obtain launch approval."
+        : row.status === "owner_review" ? `The ${row.configuration.product === "trade" ? "Trade" : "Black"} business owner must sign in, verify their email and approve this exact setup.`
+        : row.status === "approved" || row.status === "provisioning_failed" ? `Provision the approved ${row.configuration.product === "trade" ? "Trade" : "Black"} business setup.`
         : row.status === "provisioning" ? "Provisioning is in progress; check status before retrying."
         : "Complete the missing information and submit for owner review.",
     };
@@ -181,8 +185,13 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       let result: OnboardingProvisioningResult;
       try {
         if (claimed.binding && "kind" in claimed.binding) {
-          if (!deps.provisionBlackBusiness) throw new OnboardingError(503, "BLACK_SETUP_UNAVAILABLE", "Black business provisioning is not configured.");
-          result = await deps.provisionBlackBusiness({ requestId: claimed.id, configuration: claimed.configuration, configurationHash: claimed.configuration_hash, approval: claimed.approval! });
+          if (claimed.configuration.product === "trade") {
+            if (!deps.provisionTradeBusiness) throw new OnboardingError(503, "TRADE_SETUP_UNAVAILABLE", "Trade business provisioning is not configured.");
+            result = await deps.provisionTradeBusiness({ requestId: claimed.id, configuration: claimed.configuration, configurationHash: claimed.configuration_hash, approval: claimed.approval! });
+          } else {
+            if (!deps.provisionBlackBusiness) throw new OnboardingError(503, "BLACK_SETUP_UNAVAILABLE", "Black business provisioning is not configured.");
+            result = await deps.provisionBlackBusiness({ requestId: claimed.id, configuration: claimed.configuration, configurationHash: claimed.configuration_hash, approval: claimed.approval! });
+          }
         } else {
           const binding = claimed.binding as ExistingOnboardingBinding;
           result = await deps.provision({ did: binding.did, name: claimed.configuration.receptionistName!, createdBy: operatorId, expectedAssignment: binding });

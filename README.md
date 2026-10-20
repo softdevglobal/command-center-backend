@@ -1,5 +1,7 @@
 # Command Center Backend
 
+Trade receptionist MCP setup and activation: [docs/trade-mcp.md](docs/trade-mcp.md).
+
 > A multi-tenant Express + TypeScript API that powers the **Command Center** call‑center
 > application. It owns its own users and operational data in **Supabase**, and acts as an
 > authenticated **proxy** to the external **BMS Black** workshop platform (and provisions
@@ -1485,6 +1487,18 @@ WebSocket: `/api/sms/socket` (events `SMS_CONNECTED`, `SMS_UPDATED`).
 | GET | `/api/system-audit-logs` | SA/Setup | List (`?userId=&action=&resourceType=&resourceId=&from=&to=&limit=&offset=`). |
 | GET | `/api/system-audit-logs/:id` | SA/Setup | Get one by UUID. |
 
+### AI agent activity — `/api/ai/agent-activity/events`
+
+The voice bridge posts append-only call lifecycle, model usage, and MCP tool outcome
+events to `POST /api/ai/agent-activity/events`. Regular calls authenticate with the
+existing `AI_VOICE_BRIDGE_SECRET`; onboarding calls use the separate
+`AI_ONBOARDING_BRIDGE_SECRET`. Super-admins read the paginated feed through
+`GET /api/ai/agent-activity/events?limit=&offset=&brand=&mode=&did=&from=&to=`.
+Apply `scripts/add-ai-agent-activity.sql` to the Command Centre Supabase project before
+enabling bridge telemetry. The event table stores safe identifiers, durations, audio
+byte counts, reported token counters, and tool status; it intentionally excludes caller
+audio, transcripts, tool arguments, and raw tool results.
+
 ---
 
 ## 20. Database tables reference
@@ -1511,6 +1525,7 @@ the external platform, not here.)
 | `sms_threads` | SMS threads. |
 | `sms_messages` | SMS messages. |
 | `system_audit_logs` | Audit trail. |
+| `ai_agent_activity_events` | AI call usage transactions and per-call tool audit events. |
 
 Row shapes for these are defined in `src/types/*.types.ts`.
 
