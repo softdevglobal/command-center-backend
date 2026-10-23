@@ -26,7 +26,8 @@ export async function provisionTradeBusiness(input: {
   if (!app) fail("Firebase Blue is unavailable.");
   const auth = admin.auth(app), db = app.firestore();
   const owner = await auth.getUser(input.approval.ownerUid);
-  if (owner.disabled || !owner.emailVerified || owner.email?.toLowerCase() !== config.business.ownerEmail?.toLowerCase())
+  const phoneConfirmed = input.approval.method === "phone_confirmation" && owner.uid === `ai-owner-${input.requestId.replace(/-/g, "")}`;
+  if (owner.disabled || (!owner.emailVerified && !phoneConfirmed) || owner.email?.toLowerCase() !== config.business.ownerEmail?.toLowerCase())
     fail("The approved Trade owner must verify their email before provisioning.");
 
   const requestRef = db.doc(`ai_onboarding_requests/${input.requestId}`);
@@ -34,6 +35,18 @@ export async function provisionTradeBusiness(input: {
   const userRef = db.collection("users").doc(owner.uid);
   const business = config.business;
   const trade = config.tradeBusiness;
+  const base = (process.env.TRADE_ADMIN_BASE_URL?.trim() || "https://trade.bmspros.com.au").replace(/\/+$/, "");
+  let planResponse: Response;
+  try { planResponse = await fetch(`${base}/api/packages/public`, { signal: AbortSignal.timeout(5000), redirect: "error" }); }
+  catch { fail("Trade subscription plans could not be verified."); }
+  if (!planResponse.ok) fail("Trade subscription plans could not be verified.");
+  const planPayload = await planResponse.json().catch(() => null) as { ok?: unknown; plans?: unknown } | null;
+  const selectedPlan = planPayload?.ok === true && Array.isArray(planPayload.plans)
+    ? planPayload.plans.find((plan): plan is { id: string; name: string; priceLabel: string; staff?: number; features?: string[]; trialDays?: number; billingCycle?: string; validityDays?: number } =>
+      !!plan && typeof plan === "object" && (plan as { id?: unknown }).id === config.tradePlanId &&
+      typeof (plan as { name?: unknown }).name === "string" && typeof (plan as { priceLabel?: unknown }).priceLabel === "string")
+    : undefined;
+  if (!selectedPlan || selectedPlan.name !== config.tradePlanName) fail("The selected Trade subscription plan is no longer available. Refresh the plan choices and confirm again.");
   const now = admin.firestore.FieldValue.serverTimestamp();
   const businessName = business.tradingName!;
   const slugBase = businessName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "business";
@@ -65,11 +78,25 @@ export async function provisionTradeBusiness(input: {
       id: businessRef.id,
       businessName,
       businessType: trade.businessType,
+      planId: selectedPlan.id,
+      planName: selectedPlan.name,
+      plan: {
+        id: selectedPlan.id,
+        name: selectedPlan.name,
+        priceLabel: selectedPlan.priceLabel,
+        ...(typeof selectedPlan.staff === "number" ? { staff: selectedPlan.staff } : {}),
+        ...(typeof selectedPlan.trialDays === "number" ? { trialDays: selectedPlan.trialDays } : {}),
+        ...(typeof selectedPlan.billingCycle === "string" ? { billingCycle: selectedPlan.billingCycle } : {}),
+        ...(typeof selectedPlan.validityDays === "number" ? { validityDays: selectedPlan.validityDays } : {}),
+      },
+      billing_status: "pending",
+      accountStatus: "pending_payment",
+      ...(typeof selectedPlan.staff === "number" ? { staffLimit: selectedPlan.staff } : {}),
       abn: business.abn ?? null,
       businessStructure: trade.businessStructure,
       registeredForGst: business.gstRegistered === true,
       gstPercentage: business.gstRegistered === true ? 10 : null,
-      businessAddress: business.address,
+      ...(business.address ? { businessAddress: business.address } : {}),
       state: trade.state,
       postcode: trade.postcode,
       timezone: business.timezone,
@@ -84,6 +111,7 @@ export async function provisionTradeBusiness(input: {
       status: "pending_review",
       source: "command_centre_ai",
       isActive: false,
+      ...(input.approval.method === "phone_confirmation" ? { dashboardAccessEnabled: true } : {}),
       onboardingProgress: 100,
       onboardingStep: "pending_subscription_and_launch_review",
       createdByUid: "command-centre-ai",
@@ -94,11 +122,11 @@ export async function provisionTradeBusiness(input: {
         businessHours: config.businessHours ?? [],
         services: config.services ?? [],
         staff: config.staff ?? [],
-        receptionistName: config.receptionistName,
-        requestedDid: config.did,
-        escalation: config.escalation,
-        bookingPolicy: config.bookingPolicy,
-        cancellationPolicy: config.cancellationPolicy,
+        ...(config.receptionistName ? { receptionistName: config.receptionistName } : {}),
+        ...(config.did ? { requestedDid: config.did } : {}),
+        ...(config.escalation ? { escalation: config.escalation } : {}),
+        bookingPolicy: config.bookingPolicy ?? "staff_approval_required",
+        ...(config.cancellationPolicy ? { cancellationPolicy: config.cancellationPolicy } : {}),
         terms: config.terms,
         approval: input.approval,
       },

@@ -59,6 +59,12 @@ export function createOnboardingCallRouter(options: {
         server.registerTool(specification.name, { description: specification.description, inputSchema: specification.schema }, async (args: unknown) => {
           try { return { content: [{ type: "text" as const, text: JSON.stringify(await runtime.execute(specification.name, args)) }] }; }
           catch (error) {
+            // Record a stable diagnostic without logging caller details, setup
+            // fields, provider errors or private password-setup links.
+            console.warn("[onboarding-call] Tool rejected", {
+              tool: specification.name,
+              code: error instanceof OnboardingError ? error.code : error instanceof z.ZodError ? "INVALID_ARGUMENTS" : "ONBOARDING_UNAVAILABLE",
+            });
             const result = error instanceof OnboardingError ? { code: error.code, error: error.message }
               : error instanceof z.ZodError ? { code: "INVALID_ARGUMENTS", error: "Clarify the collected fields.", issues: error.issues.map(issue => ({ path: issue.path.join("."), message: issue.message })) }
                 : { code: "ONBOARDING_UNAVAILABLE", error: "Check the current setup status before retrying. Do not claim success." };
