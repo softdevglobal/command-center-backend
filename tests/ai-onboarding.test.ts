@@ -6,8 +6,8 @@ import { createOnboardingMcpServer, createOnboardingRouters } from "../src/route
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createOnboardingService, OnboardingError, type OnboardingRecord, type OnboardingRepository } from "../src/services/ai/onboarding.service.js";
-import { onboardingConfiguration } from "../src/services/ai/onboarding.schemas.js";
+import { createOnboardingService, OnboardingError, type OnboardingRecord, type OnboardingRepository, type OnboardingDependencies } from "../src/services/ai/onboarding.service.js";
+import { onboardingConfiguration, missingOnboardingInformation } from "../src/services/ai/onboarding.schemas.js";
 import { AiAgentSetupError, createAiAgentProvisioner } from "../src/services/ai/black-ai-agent-provisioning.service.js";
 import { createLiveOnboardingTools, onboardingDraftIdForCall, liveAgentMode } from "../src/services/ai/live-onboarding.service.js";
 import { createOpenAiLiveRouter } from "../src/routes/ai/openai-live.routes.js";
@@ -30,7 +30,7 @@ const completeConfig = {
   terms: { version: "pilot-1", billingSummary: "Pilot charges reviewed separately", privacySummary: "Pilot notice supplied by owner", recording: "disabled" as const, retentionDays: 0, marketingEnabled: false as const },
 };
 
-function fixture() {
+function fixture(notifications: Pick<OnboardingDependencies, "notifyOwnerReview" | "getReviewNotifications"> = {}) {
   const records = new Map<string, OnboardingRecord>();
   const events: string[] = [];
   const repository: OnboardingRepository = {
@@ -52,7 +52,7 @@ function fixture() {
   let businessAttempts = 0;
   let fail = false;
   const service = createOnboardingService({
-    repository, getMapping: async () => mapping, now: () => clock,
+    repository, getMapping: async () => mapping, now: () => clock, ...notifications,
     provision: async input => {
       attempts++;
       assert.equal(input.expectedAssignment?.ownerUid, "owner-a");
@@ -83,6 +83,21 @@ function newBusinessConfiguration() {
     staff: [{ ...completeConfig.staff[0]!, email: "staff@example.test", workingDays: [1], serviceNames: ["Diagnostic"] }],
   };
 }
+
+test("new Black and Trade business onboarding does not require receptionist setup fields", async () => {
+  const { receptionistName: _name, did: _did, escalation: _escalation, bookingPolicy: _booking, cancellationPolicy: _cancellation, ...black } = newBusinessConfiguration();
+  assert.deepEqual(missingOnboardingInformation(black), []);
+  const f = fixture();
+  const draft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0, configuration: black });
+  assert.equal((await f.service.submitForReview(operator, { draftId: draft.draftId, expectedVersion: draft.version })).status, "owner_review");
+  const trade = { setupMode: "new_business" as const, product: "trade" as const, business: black.business, terms: black.terms,
+    tradeBusiness: { businessType: "Plumbing" as const, businessStructure: "Sole Trader" as const, state: "VIC" as const, postcode: "3000", serviceAreas: ["Melbourne"] } };
+  assert.deepEqual(missingOnboardingInformation(trade), []);
+  const tradeDraft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0, configuration: trade });
+  assert.equal((await f.service.submitForReview(operator, { draftId: tradeDraft.draftId, expectedVersion: tradeDraft.version })).status, "owner_review");
+  const legacy = { ...black, setupMode: "existing_business" as const };
+  assert.ok(missingOnboardingInformation(legacy).includes("did"));
+});
 
 test("new Black business review uses verified owner email without requiring a pre-existing workshop mapping", async () => {
   const f = fixture(); f.mapping.owner_id = "an-unrelated-existing-workshop";
@@ -356,7 +371,7 @@ test("owner HTTP approval requires explicit acceptance and uses the authenticate
   }
 });
 
-test("voice onboarding saves successive spoken sections into one call-bound draft", async () => {
+test("voice onboarding saves successive spoken answers into one call-bound draft", async () => {
   const f = fixture();
   let authorizations = 0;
   const options = { service: f.service, operatorId: operator, sessionId: "live-onboarding-call-a", terms: completeConfig.terms,
@@ -373,6 +388,70 @@ test("voice onboarding saves successive spoken sections into one call-bound draf
   assert.equal(reattached.initialStatus.configuration.business?.tradingName, "Spoken Workshop");
   assert.equal(f.records.size, 1);
   assert.ok(authorizations >= 4);
+});
+
+test("individual Trade answers preserve earlier fields and incomplete answers survive reconnect until resolved", async () => {
+  const f = fixture();
+  const options = { service: f.service, operatorId: operator, sessionId: "per-answer-trade", terms: completeConfig.terms,
+    authorizeOperator: async () => {}, isEnabled: () => true };
+  const call = await createLiveOnboardingTools(options);
+  await call.execute("save_onboarding_draft", { configuration: { product: "trade", tradeBusiness: { businessType: "Plumbing" } } });
+  await call.execute("save_onboarding_draft", { configuration: { tradeBusiness: { state: "VIC" } } });
+  await call.execute("save_onboarding_draft", { configuration: { tradeBusiness: { postcode: "3000" } } });
+  await call.execute("save_onboarding_draft", { configuration: { pendingAnswers: [{ question: "Which service?", answer: "Drain inspection" }] } });
+  const reconnected = await createLiveOnboardingTools(options);
+  assert.deepEqual(reconnected.initialStatus.configuration.tradeBusiness, { businessType: "Plumbing", state: "VIC", postcode: "3000" });
+  assert.deepEqual(reconnected.initialStatus.configuration.pendingAnswers, [{ question: "Which service?", answer: "Drain inspection" }]);
+  await reconnected.execute("save_onboarding_draft", { configuration: {
+    services: [{ name: "Drain inspection", durationMinutes: 60, priceBasis: "Quote after inspection" }], pendingAnswers: [],
+  } });
+  const saved = await f.service.getStatus(operator, call.draftId);
+  assert.equal(saved.configuration.tradeBusiness?.businessType, "Plumbing");
+  assert.equal(saved.configuration.services?.[0]?.name, "Drain inspection");
+  assert.deepEqual(saved.configuration.pendingAnswers, []);
+});
+
+test("unresolved per-answer notes block owner review until structured details are resolved", async () => {
+  const f = fixture();
+  const draft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0,
+    configuration: { ...completeConfig, pendingAnswers: [{ question: "Which other service?", answer: "Wheel alignment" }] } });
+  await assert.rejects(f.service.submitForReview(operator, { draftId: draft.draftId, expectedVersion: draft.version }), errorCode("INCOMPLETE_SETUP"));
+  const resolved = await f.service.saveDraft(operator, { draftId: draft.draftId, expectedVersion: draft.version,
+    configuration: { ...completeConfig, pendingAnswers: [] } });
+  const review = await f.service.submitForReview(operator, { draftId: resolved.draftId, expectedVersion: resolved.version });
+  assert.equal(review.status, "owner_review");
+});
+
+test("review notifications start only after valid confirmed submission and persist channel status in conversation", async () => {
+  const sends: Array<{ draftId: string; configurationHash: string; reviewUrl: string; ownerEmail: string; ownerPhone: string }> = [];
+  const summary = { sms: { status: "accepted" as const }, email: { status: "unknown" as const } };
+  const f = fixture({ notifyOwnerReview: async input => { sends.push(input); return summary; }, getReviewNotifications: async () => summary });
+  const call = await createLiveOnboardingTools({ service: f.service, operatorId: operator, sessionId: "notification-confirmation", terms: completeConfig.terms,
+    authorizeOperator: async () => {}, isEnabled: () => true });
+  await call.execute("save_onboarding_draft", { configuration: { business: { ownerEmail: completeConfig.business.ownerEmail } } });
+  assert.equal(sends.length, 0);
+  await assert.rejects(call.execute("submit_for_owner_review", { callerConfirmedDetails: true }), errorCode("INCOMPLETE_SETUP"));
+  assert.equal(sends.length, 0);
+  const { terms: _terms, ...facts } = completeConfig;
+  await call.execute("save_onboarding_draft", { configuration: facts });
+  await assert.rejects(call.execute("submit_for_owner_review", { callerConfirmedDetails: false }));
+  assert.equal(sends.length, 0);
+  const result = await call.execute("submit_for_owner_review", { callerConfirmedDetails: true }) as { ownerReviewUrl: string; reviewNotifications: typeof summary };
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0]?.ownerEmail, completeConfig.business.ownerEmail);
+  assert.equal(sends[0]?.ownerPhone, completeConfig.business.ownerPhone);
+  assert.equal(sends[0]?.reviewUrl, result.ownerReviewUrl);
+  assert.deepEqual(result.reviewNotifications, summary);
+  const status = await call.execute("get_onboarding_status", {}) as { reviewNotifications: typeof summary };
+  assert.deepEqual(status.reviewNotifications, summary);
+});
+
+test("notification service failure preserves the submitted draft and never implies messages were sent", async () => {
+  const f = fixture({ notifyOwnerReview: async () => { throw new Error("provider unavailable"); } });
+  const review = await f.reviewed();
+  assert.equal(review.status, "owner_review");
+  assert.equal(review.reviewNotifications?.sms.status, "storage_unavailable");
+  assert.equal((await f.service.getStatus(operator, review.draftId)).status, "owner_review");
 });
 
 test("voice tools cannot choose another call draft, supply approval or change published terms", async () => {

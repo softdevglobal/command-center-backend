@@ -55,7 +55,7 @@ export function createOnboardingMcpServer(service: OnboardingService, operatorId
     "Validate a Black setup for review. New businesses are bound to their supplied owner email; existing businesses are bound to their server-mapped workshop. The verified owner must approve this exact version in Black. This does not grant approval or activate calls.",
     onboardingVersionArguments.shape, args => execute(() => service.submitForReview(operatorId, args)));
   server.tool("provision_approved_business",
-    "After verified owner approval, provision a new Black workshop, branch, priced services, staff schedules and knowledge in test mode, or create a receptionist identity for an existing mapped workshop. Billing, staff invitations, phone routing and launch approval remain separate. Never claim live activation.",
+    "After verified owner approval, provision a new Black owner and branch; the owner adds services and staff after login. Trade onboarding creates the business account. Billing, staff invitations, phone routing and launch approval remain separate. Never claim live activation.",
     onboardingVersionArguments.shape, args => execute(() => service.provisionApprovedBusiness(operatorId, args)));
   return server;
 }
@@ -83,6 +83,7 @@ export function createOnboardingRouters(options: {
   adminRoutes.use(enabled, authenticateOperator, authorizeOperator);
   adminRoutes.put("/:draftId", handle((req, res) => service.saveDraft(operator(res), saveOnboardingArguments.parse({ ...req.body, draftId: draftId(req) }))));
   adminRoutes.get("/:draftId", handle((req, res) => service.getStatus(operator(res), draftId(req))));
+  adminRoutes.post("/:draftId/account-setup-notifications", handle((req, res) => service.sendAccountSetupNotifications(operator(res), draftId(req))));
   adminRoutes.post("/:draftId/submit", handle((req, res) => service.submitForReview(operator(res), onboardingVersionArguments.parse({ ...req.body, draftId: draftId(req) }))));
   adminRoutes.post("/:draftId/provision", handle((req, res) => service.provisionApprovedBusiness(operator(res), onboardingVersionArguments.parse({ ...req.body, draftId: draftId(req) }))));
 

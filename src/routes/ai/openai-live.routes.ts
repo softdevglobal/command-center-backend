@@ -308,7 +308,7 @@ export function createOpenAiLiveRouter(options: {
           type: "live",
           model: process.env.OPENAI_LIVE_MODEL?.trim() || "gpt-live-1",
           instructions,
-          audio: { output: { voice: process.env.OPENAI_LIVE_VOICE?.trim() || "marin" } },
+          audio: { output: { voice: "shimmer" } },
           delegation: {
             type: "responses",
             responses: {

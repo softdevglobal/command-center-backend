@@ -5,6 +5,8 @@ import { createOnboardingService, OnboardingError, type OnboardingRecord, type O
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { provisionBlackBusiness } from "./black-business-provisioning.service.js";
 import { provisionTradeBusiness } from "./trade-business-provisioning.service.js";
+import { onboardingReviewNotifier } from "./onboarding-review-notification.service.js";
+import { prepareOnboardingOwner, notifyOnboardingAccount } from "./onboarding-account.service.js";
 
 function database() {
   const url = getSupabaseProjectUrl();
@@ -36,7 +38,18 @@ const repository: OnboardingRepository = {
   },
 };
 
-export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness, provisionTradeBusiness });
+export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness, provisionTradeBusiness,
+  notifyOwnerReview: async input => {
+    const result = await onboardingReviewNotifier.notify(input);
+    console.info("[onboarding-review-notifications]", { draftId: input.draftId, sms: result.sms.status,
+      smsCode: result.sms.code ?? null, email: result.email.status, emailCode: result.email.code ?? null });
+    return result;
+  },
+  getReviewNotifications: input => onboardingReviewNotifier.get(input),
+  prepareOwnerAccount: prepareOnboardingOwner,
+  notifyAccountSetup: notifyOnboardingAccount,
+  getAccountNotifications: input => onboardingReviewNotifier.get({ ...input, configurationHash: `account_setup:${input.configurationHash}` }),
+});
 
 /** Voice sessions use a nominated existing platform operator, not a caller-selected principal. */
 export async function assertVoiceOnboardingOperator(operatorId: string): Promise<void> {

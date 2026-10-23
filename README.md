@@ -358,6 +358,7 @@ FIREBASE_PINK_SERVICE_ACCOUNT={"type":"service_account", ...}
 
 # BMS Black API base (optional; has a default)
 BLACK_API_BASE_URL=https://black.bmspros.com.au
+BLACK_ADMIN_BASE_URL=https://black.bmspros.com.au
 
 # TextBee SMS (optional)
 TEXTBEE_API_KEY=...
@@ -462,6 +463,7 @@ Private keys may contain literal `\n` which is normalized to real newlines.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `BLACK_API_BASE_URL` | `https://black.bmspros.com.au` | Base URL of the BMS Black REST API. |
+| `BLACK_ADMIN_BASE_URL` | `https://black.bmspros.com.au` | Public HTTPS Black site used for owner login and account setup links. Keep this public URL even when `BLACK_API_BASE_URL` points to a local Black server. |
 
 ### Bootstrap secret
 
@@ -1769,3 +1771,51 @@ curl http://127.0.0.1:5050/api/bms-black/services \
 
 _This README documents the backend as implemented in `src/`. When code changes, update the
 relevant section (especially the API reference, env vars, and the 4‑hour session config)._
+# Owner review links by SMS and email
+
+After a confirmed, complete onboarding draft is submitted for owner review,
+the backend sends its product-specific owner review URL to the saved owner's
+mobile and email. Black and Trade use their existing review pages and login /
+verified-owner approval checks. Notifications never approve or activate accounts.
+The voice agent confirms the destinations before submission and reports the
+separate `reviewNotifications.sms` and `.email` statuses returned by the tools.
+
+Deploy the backend and run `scripts/add-ai-onboarding-review-notifications.sql`
+in the same Supabase project as `ai_onboarding_drafts`. This adds a server-only
+send ledger; no Black/Trade frontend or voice-bridge environment change is needed.
+Provider requests are made only on review submission, never on draft saves.
+
+Configure these variables **on the Command Centre backend**:
+
+```dotenv
+TEXTBEE_API_KEY=<existing TextBee API key>
+TEXTBEE_DEVICE_ID=<registered online TextBee device id>
+# Optional: TEXTBEE_SIM_SUBSCRIPTION_ID=<SIM selector>
+ZEPTOMAIL_SYSTEM_TOKEN=<existing verified system mail-agent token>
+ZEPTOMAIL_SYSTEM_FROM_ADDRESS=noreply@bmspros.com.au
+ZEPTOMAIL_SYSTEM_FROM_NAME=BMS Pro
+ZEPTOMAIL_URL=https://api.zeptomail.com.au/v1.1/email
+```
+
+`ZEPTOMAIL_TOKEN` is supported as a fallback. Use the sender and regional API URL
+approved for your ZeptoMail account, matching the existing admin-panel email
+setup. SMS uses TextBee's existing device-specific send API. Confirm the owner's
+mobile in international format, for example `+61400000000`; local numbers are
+not guessed or replaced with the onboarding DID. Review URLs must be public
+HTTPS URLs, so configure production `BLACK_API_BASE_URL` and `TRADE_ADMIN_BASE_URL`
+correctly before sending. A new onboarding call fetches the updated instructions.
+
+The ledger claims each `(draft, configuration hash, channel)` before sending.
+Concurrent or repeated submissions do not duplicate an accepted, failed, in-flight
+or uncertain attempt. A provider timeout / interrupted attempt remains unknown;
+staff must verify provider history before any manual resend. No background retry
+worker or automatic resend is provided. Missing credentials or storage problems
+are reported without falsely claiming a message was sent; the draft remains
+submitted for review. `accepted` means provider acceptance, not delivery to an
+inbox or handset. Delivery receipts are not implemented in this change.
+
+Offline checks (mock providers only; no paid SMS, email or OpenAI calls):
+
+```bash
+node --import tsx --test tests/ai-onboarding-review-notifications.test.ts
+```
