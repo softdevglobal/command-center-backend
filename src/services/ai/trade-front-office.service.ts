@@ -8,6 +8,7 @@ import { resolveVoiceProductForDid } from "./voice-route.service.js";
 const documentId = z.string().trim().min(1).max(128).refine(value => !value.includes("/") && value !== "." && value !== "..");
 const tenantSchema = z.object({ did: z.string().trim().regex(/^\+?\d{6,15}$/), token: z.string().trim().min(32) }).strict();
 export type TradeMcpTenant = z.infer<typeof tenantSchema> & { pinnedBusinessId?: string };
+export type TradeBusinessScope = Pick<TradeMcpTenant, "did" | "pinnedBusinessId">;
 
 export function parseTradeMcpTenants(raw = process.env.AI_MCP_TRADE_TENANT_CONFIG_JSON ?? "[]"): TradeMcpTenant[] {
   const tenants = z.array(tenantSchema).parse(JSON.parse(raw));
@@ -86,16 +87,22 @@ function database() {
   return app.firestore();
 }
 
-export async function resolveTradeBusiness(tenant: TradeMcpTenant) {
+async function resolveTradeBusinessRecord(tenant: TradeBusinessScope) {
   const mapping = await resolveTradeDidMapping(tenant.did, undefined, tenant.pinnedBusinessId);
   const snap = await database().collection("businesses").doc(mapping.businessId).get();
   const data = snap.data();
   if (!data || data.isActive === false || data.status === "suspended") throw new Error("Trade business is unavailable.");
+  return { data, businessId: mapping.businessId, mapping };
+}
+
+export async function resolveTradeBusiness(tenant: TradeBusinessScope) {
+  const business = await resolveTradeBusinessRecord(tenant);
+  const { data, businessId } = business;
   if (typeof data.bookingSlug !== "string" || !data.bookingSlug.trim()) throw new Error("Trade business has no booking link.");
   // The public booking API resolves by slug: reject ambiguous or stale slug mappings.
   const matches = await database().collection("businesses").where("bookingSlug", "==", data.bookingSlug).limit(2).get();
-  if (matches.size !== 1 || matches.docs[0]?.id !== mapping.businessId) throw new Error("Trade booking link is ambiguous.");
-  return { data, businessId: mapping.businessId, mapping };
+  if (matches.size !== 1 || matches.docs[0]?.id !== businessId) throw new Error("Trade booking link is ambiguous.");
+  return business;
 }
 
 function apiUrl(path: string) {
@@ -104,8 +111,8 @@ function apiUrl(path: string) {
   return new URL(path, base);
 }
 
-export async function listTradeServices(tenant: TradeMcpTenant) {
-  const business = await resolveTradeBusiness(tenant);
+export async function listTradeServices(tenant: TradeBusinessScope) {
+  const business = await resolveTradeBusinessRecord(tenant);
   const snap = await database().collection("services").where("businessId", "==", business.businessId).get();
   return snap.docs.filter(doc => doc.data().isActive === true).map(doc => {
     const data = doc.data();
@@ -113,8 +120,8 @@ export async function listTradeServices(tenant: TradeMcpTenant) {
   });
 }
 
-export async function getTradeBusinessProfile(tenant: TradeMcpTenant) {
-  const { data, businessId, mapping } = await resolveTradeBusiness(tenant);
+export async function getTradeBusinessProfile(tenant: TradeBusinessScope) {
+  const { data, businessId, mapping } = await resolveTradeBusinessRecord(tenant);
   return { brand: "trade", did: mapping.did, businessId, businessName: data.businessName, address: data.businessAddress, phone: data.businessPhone, email: data.businessEmail, timezone: data.timezone || "Australia/Melbourne", bookingWorkflow: "STAFF_REVIEW" };
 }
 
