@@ -4,6 +4,7 @@ import "./env-bootstrap.js";
 import { printStartupDatabaseStatus } from "./db/startup-status.js";
 import app from "./app.js";
 import { attachSmsRealtime } from "./realtime/sms-events.js";
+import { startSophieMailAgent } from "./services/ai/sophie-mail-agent.service.js";
 
 const PORT = Number(process.env.PORT) || 5050;
 /** Bind IPv4 explicitly — on macOS, `localhost` often resolves to 127.0.0.1 while a default listen may only attach to IPv6, so Postman/curl to 127.0.0.1 would miss this server (or hit another listener like AirPlay on :5000). */
@@ -26,6 +27,7 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 attachSmsRealtime(server);
+startSophieMailAgent();
 
 server.on("error", (err: NodeJS.ErrnoException) => {
   if (err.code === "EADDRINUSE") {
