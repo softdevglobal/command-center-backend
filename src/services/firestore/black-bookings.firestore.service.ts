@@ -111,10 +111,17 @@ function bookingDateKey(data: FirebaseFirestore.DocumentData): string {
 export async function findBlackBookingsByPhoneInFirestore(
   options: BlackBookingsByPhoneOptions
 ): Promise<BlackBookingRecord[]> {
+  return findBookingsByPhoneInDb(blackFirestore(), options);
+}
+
+/** Same lookup against any BMS Firestore (Black and Pink share the `bookings` phone fields). */
+export async function findBookingsByPhoneInDb(
+  db: Firestore,
+  options: BlackBookingsByPhoneOptions
+): Promise<BlackBookingRecord[]> {
   const variants = buildPhoneLookupVariants(options.phone);
   if (variants.length === 0) return [];
 
-  const db = blackFirestore();
   const merged = new Map<string, FirebaseFirestore.DocumentData>();
 
   await Promise.all(
