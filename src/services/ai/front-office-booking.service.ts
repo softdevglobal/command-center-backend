@@ -56,9 +56,9 @@ export function createFrontOfficeBookingTools(adapter:FrontOfficeBrandAdapter, r
       });
       while(offers.size>256){const token=offers.keys().next().value;if(token)offers.delete(token);}
       return {brand:adapter.brand,workshopName:context.workshopName,branchName:context.branchName,
-        date:query.date,timeZone:available.timeZone,slotType:"DROP_OFF",bookingWorkflow:"STAFF_APPROVAL",
+        date:query.date,timeZone:available.timeZone,slotType:"DROP_OFF",bookingWorkflow:"WORKSHOP_PERMISSION",
         dailyLimitReached:available.dailyLimitReached,slots,
-        message:slots.length?"These are drop-off options based on branch hours and the daily booking limit. Staff approval is required; no mechanic or time slot is exclusively reserved.":"No drop-off options remain for this date. Ask for another date or transfer to staff."};
+        message:slots.length?"These are drop-off options based on branch hours and the daily booking limit. The workshop's permission determines whether Sophie can confirm the booking; only a CONFIRMED creation result means it is confirmed. No mechanic or time slot is reserved before creation.":"No drop-off options remain for this date. Ask for another date or transfer to staff."};
     },
     async createBooking(raw:unknown):Promise<FrontOfficeBookingResult|Decision> {
       const input=bookingArguments.parse(raw);
@@ -85,7 +85,7 @@ export function createFrontOfficeBookingTools(adapter:FrontOfficeBrandAdapter, r
         const live=await adapter.getAvailableSlots(context,{date:offer.date,serviceIds:offer.serviceIds});
         if(!live.bookingContractReady) return {status:"REJECTED" as const,message:"Black's safe AI booking contract is not deployed. Transfer to staff."};
         const result=await adapter.createBooking(context,booking);
-        if(result.status==="PENDING_REVIEW") completed.set(idempotencyKey,{hash,result});
+        if(result.status==="PENDING_REVIEW" || result.status==="CONFIRMED") completed.set(idempotencyKey,{hash,result});
         return result;
       })().finally(()=>pending.delete(hash));
       pending.set(hash,attempt);

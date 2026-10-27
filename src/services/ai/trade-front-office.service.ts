@@ -1,9 +1,15 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { staffAssignmentResult, type StaffAssignmentResult } from "./staff-assignment-result.js";
 import { z } from "zod";
 import { getDidMappingByDid } from "../did-mappings.service.js";
 import type { DidMappingRow } from "../../types/did-mapping.types.js";
 import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
 import { resolveVoiceProductForDid } from "./voice-route.service.js";
+import { getTradeAgentIdToken } from "./trade-agent-identity.service.js";
+import {
+  proxyBlueBookingInspectionRequest,
+  proxyBlueBookingSlotAvailability,
+} from "../bms_blue/blue-booking.proxy.service.js";
 
 const documentId = z.string().trim().min(1).max(128).refine(value => !value.includes("/") && value !== "." && value !== "..");
 const tenantSchema = z.object({ did: z.string().trim().regex(/^\+?\d{6,15}$/), token: z.string().trim().min(32) }).strict();
@@ -96,19 +102,7 @@ async function resolveTradeBusinessRecord(tenant: TradeBusinessScope) {
 }
 
 export async function resolveTradeBusiness(tenant: TradeBusinessScope) {
-  const business = await resolveTradeBusinessRecord(tenant);
-  const { data, businessId } = business;
-  if (typeof data.bookingSlug !== "string" || !data.bookingSlug.trim()) throw new Error("Trade business has no booking link.");
-  // The public booking API resolves by slug: reject ambiguous or stale slug mappings.
-  const matches = await database().collection("businesses").where("bookingSlug", "==", data.bookingSlug).limit(2).get();
-  if (matches.size !== 1 || matches.docs[0]?.id !== businessId) throw new Error("Trade booking link is ambiguous.");
-  return business;
-}
-
-function apiUrl(path: string) {
-  const base = new URL(process.env.TRADE_API_BASE_URL ?? "");
-  if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) throw new Error("Trade API requires HTTPS.");
-  return new URL(path, base);
+  return resolveTradeBusinessRecord(tenant);
 }
 
 export async function listTradeServices(tenant: TradeBusinessScope) {
@@ -122,7 +116,8 @@ export async function listTradeServices(tenant: TradeBusinessScope) {
 
 export async function getTradeBusinessProfile(tenant: TradeBusinessScope) {
   const { data, businessId, mapping } = await resolveTradeBusinessRecord(tenant);
-  return { brand: "trade", did: mapping.did, businessId, businessName: data.businessName, address: data.businessAddress, phone: data.businessPhone, email: data.businessEmail, timezone: data.timezone || "Australia/Melbourne", bookingWorkflow: "STAFF_REVIEW" };
+  const autoConfirmationAvailable = process.env.AI_AUTO_ASSIGN_STAFF_ENABLED === "true" && data.sophieBookingAuthority === true;
+  return { brand: "trade", did: mapping.did, businessId, businessName: data.businessName, address: data.businessAddress, phone: data.businessPhone, email: data.businessEmail, timezone: data.timezone || "Australia/Melbourne", bookingWorkflow: autoConfirmationAvailable ? "SOPHIE_AUTHORIZED" : "BUSINESS_REVIEW" };
 }
 
 export async function getTradeAvailability(tenant: TradeMcpTenant, raw: unknown) {
@@ -130,16 +125,20 @@ export async function getTradeAvailability(tenant: TradeMcpTenant, raw: unknown)
   const days = (Date.parse(args.to) - Date.parse(args.from)) / 86400000;
   if (days < 0 || days >= 90) throw new Error("Choose a date range of 1 to 90 days.");
   const business = await resolveTradeBusiness(tenant);
-  const url = apiUrl("/api/booking/slot-availability");
-  url.search = new URLSearchParams({ slug: business.data.bookingSlug, from: args.from, to: args.to }).toString();
-  const response = await fetch(url, { signal: AbortSignal.timeout(25000), redirect: "error" });
+  const firebaseIdToken = await getTradeAgentIdToken(tenant.did, business.businessId);
+  const response = await proxyBlueBookingSlotAvailability(firebaseIdToken, {
+    businessId: business.businessId,
+    from: args.from,
+    to: args.to,
+  });
   const body = await response.json() as Record<string, unknown>;
   if (!response.ok || body.ok !== true || !Array.isArray(body.unavailable)) throw new Error("Trade availability could not be verified.");
   const unavailable = body.unavailable.map(slot => z.object({ date, timeRange: z.enum(["morning", "afternoon"]) }).parse(slot));
-  return { brand: "trade", timezone: business.data.timezone || "Australia/Melbourne", from: args.from, to: args.to, unavailable, sessions: ["morning", "afternoon"], message: "These sessions are unavailable. Other sessions are preferences subject to validation and staff review, not confirmed appointments." };
+  const autoConfirmationAvailable = process.env.AI_AUTO_ASSIGN_STAFF_ENABLED === "true" && business.data.sophieBookingAuthority === true;
+  return { brand: "trade", timezone: business.data.timezone || "Australia/Melbourne", from: args.from, to: args.to, unavailable, sessions: ["morning", "afternoon"], bookingWorkflow: autoConfirmationAvailable ? "SOPHIE_AUTHORIZED" : "BUSINESS_REVIEW", message: autoConfirmationAvailable ? "These sessions are customer preferences. Sophie can confirm only if staff assignment succeeds." : "These sessions are customer preferences subject to business review; do not promise a confirmed appointment." };
 }
 
-export type TradeSubmissionResult = { status: "PENDING_REVIEW" | "UNKNOWN" | "REJECTED"; requestId?: string; message: string };
+export type TradeSubmissionResult = { status: "PENDING_REVIEW" | "CONFIRMED" | "UNKNOWN" | "REJECTED"; requestId?: string; message: string; staffAssignment?: StaffAssignmentResult };
 export interface TradeSubmissionStore {
   claim(key: string, fingerprint: string): Promise<{ fingerprint: string; result?: TradeSubmissionResult } | null>;
   complete(key: string, result: TradeSubmissionResult): Promise<void>;
@@ -178,12 +177,18 @@ export async function createTradeInspectionRequest(tenant: TradeMcpTenant, raw: 
   const business = await resolveTradeBusiness(tenant);
   const service = await database().collection("services").doc(details.serviceId).get();
   if (!service.exists || service.data()?.businessId !== business.businessId || service.data()?.isActive !== true) throw new Error("Choose an active service from this business.");
-  const payload = { ...details, slug: business.data.bookingSlug, requestType: "existing_service" };
-  const url = apiUrl("/api/booking/inspection-request");
+  const payload = { ...details, businessId: business.businessId, requestType: "existing_service",
+    aiAutoAssignStaff: process.env.AI_AUTO_ASSIGN_STAFF_ENABLED === "true" };
+  // Authenticate before claiming the request key; missing setup must not poison retries.
+  const firebaseIdToken = await getTradeAgentIdToken(tenant.did, business.businessId);
   return submitTradeOnce(submissionStore(), business.businessId, requestKey, payload, async () => {
-    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(25000), redirect: "error" });
+    const response = await proxyBlueBookingInspectionRequest(firebaseIdToken, payload);
     const body = await response.json() as Record<string, unknown>;
-    if (response.ok && body.ok === true && typeof body.requestId === "string" && body.requestId) return { status: "PENDING_REVIEW", requestId: body.requestId, message: "Inspection request submitted for staff review. This is not a confirmed appointment." };
+    if (response.ok && body.ok === true && typeof body.requestId === "string" && body.requestId) {
+      const confirmed = body.confirmed === true && body.status === "scheduled";
+      const staffAssignment = staffAssignmentResult(body.staffAssignment, confirmed);
+      return { status: confirmed ? "CONFIRMED" : "PENDING_REVIEW", requestId: body.requestId, ...(staffAssignment ? { staffAssignment } : {}), message: confirmed ? "The inspection visit is confirmed and a qualified staff member has been assigned." : "Inspection request submitted for business review. Do not describe it as confirmed." };
+    }
     // Upstream notifications/audit may fail after a successful write. Never retry automatically.
     return unknownResult;
   });

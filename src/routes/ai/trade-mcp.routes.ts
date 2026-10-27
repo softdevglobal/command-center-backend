@@ -3,6 +3,7 @@ import { Router } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { TradeAgentIdentityError } from "../../services/ai/trade-agent-identity.service.js";
 import {
   authenticateTradeMcpRequest, resolveTradeBusiness,
   getTradeBusinessProfile, listTradeServices, getTradeAvailability, createTradeInspectionRequest,
@@ -13,19 +14,32 @@ const router = Router();
 const windows = new Map<string, { count: number; expires: number }>();
 const result = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }] });
 
+export function tradeMcpToolFailure(tool: string, error: unknown) {
+  const setupRequired = error instanceof TradeAgentIdentityError;
+  const submission = tool === "create_inspection_request";
+  const code = setupRequired ? "RECEPTIONIST_SETUP_REQUIRED" : "TRADE_TOOL_UNAVAILABLE";
+  console.warn("[trade-mcp] Tool failed", { tool, code });
+  const message = setupRequired
+    ? "The receptionist could not authenticate. This attempt did not submit an inspection request. Tell the caller you are unable to submit it right now and offer staff help. Do not claim it is saved, pending review or confirmed."
+    : submission
+      ? "The submission result could not be verified. Tell the caller you cannot confirm whether it was saved and staff must check. Keep the original requestKey; do not create another submission."
+      : "The business tool is unavailable. Do not invent availability or proceed to submission; offer staff help.";
+  return { ...result({ status: setupRequired ? "REJECTED" : submission ? "UNKNOWN" : "UNAVAILABLE", code, message }), isError: true };
+}
+
 export function createTradeMcpServer(tenant: TradeMcpTenant) {
   const server = new McpServer({ name: "bmspro-trade-front-office", version: "1.0.0" });
   const scopedTenant = tenant;
-  const safeTool = (run: () => Promise<unknown>) => async () => {
-    try { return result(await run()); } catch { return { ...result({ error: "Trade tool could not complete. Verify details or transfer to staff; do not claim a request was saved." }), isError: true }; }
+  const safeTool = (tool: string, run: () => Promise<unknown>) => async () => {
+    try { return result(await run()); } catch (error) { return tradeMcpToolFailure(tool, error); }
   };
-  server.tool("get_business_profile", "Get this receptionist's assigned Trade business. Business selection is controlled by the server.", {}, safeTool(() => getTradeBusinessProfile(scopedTenant)));
-  server.tool("list_services", "List active services for the assigned Trade business. Do not invent pricing or availability.", {}, safeTool(() => listTradeServices(scopedTenant)));
-  server.tool("get_available_slots", "Get unavailable morning/afternoon sessions for a date range. Other sessions are customer preferences subject to staff review; never promise a confirmed appointment.", tradeAvailabilityArguments.shape,
-    async args => safeTool(() => getTradeAvailability(scopedTenant, args))());
+  server.tool("get_business_profile", "Get this receptionist's assigned Trade business. Business selection is controlled by the server.", {}, safeTool("get_business_profile", () => getTradeBusinessProfile(scopedTenant)));
+  server.tool("list_services", "List active services for the assigned Trade business. Do not invent pricing or availability.", {}, safeTool("list_services", () => listTradeServices(scopedTenant)));
+  server.tool("get_available_slots", "Get unavailable morning/afternoon sessions for a date range. Other sessions are customer preferences; the business owner can allow Sophie to confirm only when staff assignment succeeds.", tradeAvailabilityArguments.shape,
+    async args => safeTool("get_available_slots", () => getTradeAvailability(scopedTenant, args))());
   if (process.env.AI_MCP_TRADE_REQUESTS_ENABLED === "true") {
-    server.tool("create_inspection_request", "Submit an inspection request for staff review. Collect service, customer contact, site address and preferred sessions; read everything back and obtain explicit confirmation. Generate a requestKey of at least 16 characters per customer request and reuse it and identical details on retries. For UNKNOWN transfer to staff and never use a new key. Only PENDING_REVIEW means submitted; never say confirmed.", tradeRequestArguments.shape,
-      async args => safeTool(() => createTradeInspectionRequest(scopedTenant, args))());
+    server.tool("create_inspection_request", "Submit an inspection request after get_available_slots succeeds. Collect service, customer contact, site address and preferred sessions, asking only for missing details. Read the details back once and obtain explicit confirmation. Tell the caller you are submitting, call this tool once, then explain its result plainly. CONFIRMED: the inspection is booked. PENDING_REVIEW: the request is received and the business must approve the visit. REJECTED: explain the problem and offer staff help; do not say it was received. UNKNOWN: say you cannot verify whether it was saved and staff must check. Never claim a transfer or callback unless that action succeeds. Do not read internal codes or request keys to the caller. Generate a requestKey of at least 16 characters per customer request and reuse it and identical details on retries. Never use a new key for an UNKNOWN result.", tradeRequestArguments.shape,
+      async args => safeTool("create_inspection_request", () => createTradeInspectionRequest(scopedTenant, args))());
   }
   return server;
 }

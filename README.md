@@ -1,6 +1,6 @@
 # Command Center Backend
 
-Trade receptionist MCP setup and activation: [docs/trade-mcp.md](docs/trade-mcp.md).
+Trade receptionist booking authentication and setup: [docs/trade-booking-auth.md](docs/trade-booking-auth.md).
 
 > A multi-tenant Express + TypeScript API that powers the **Command Center** call‑center
 > application. It owns its own users and operational data in **Supabase**, and acts as an
