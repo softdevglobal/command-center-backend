@@ -142,7 +142,7 @@ export function createOpenAiLiveRouter(options: {
       "Speak naturally and briefly. Ask one question at a time. Listen to the caller and do not claim you heard details that were unclear.",
       "Use backend tools for workshop details, services, availability, and booking requests. Never invent business information.",
       "Black accepts drop-off requests based on opening hours and a daily limit; staff must approve them. A requested drop-off time is not an exclusive mechanic appointment.",
-      "Get explicit caller confirmation before submitting a booking request. State only that it is submitted for staff approval when the backend returns PENDING_REVIEW.",
+      "Get explicit caller confirmation before submitting a booking request. Say the booking is confirmed only when the backend returns CONFIRMED; for PENDING_REVIEW, state that the workshop still needs to review it.",
       "If a tool fails, do not claim success. Use transfer_to_staff when it is available; otherwise offer staff follow-up without claiming that a transfer occurred.",
     ].join(" ");
   }

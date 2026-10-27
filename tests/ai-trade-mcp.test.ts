@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import tradeRouter, { createTradeMcpServer } from "../src/routes/ai/trade-mcp.routes.js";
+import tradeRouter, { createTradeMcpServer, tradeMcpToolFailure } from "../src/routes/ai/trade-mcp.routes.js";
+import { TradeAgentIdentityError } from "../src/services/ai/trade-agent-identity.service.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { DidMappingRow } from "../src/types/did-mapping.types.js";
 import { resolveTradeDidMapping, authenticateTradeMcpRequest } from "../src/services/ai/trade-front-office.service.js";
@@ -10,6 +11,22 @@ import { authenticateTradeMcp, parseTradeMcpTenants, submitTradeOnce, tradeReque
 
 const token = "trade-test-credential-".padEnd(40, "x");
 const tenant = { did: "+61400000001", token };
+
+test("receptionist setup failures are distinct from uncertain submission outcomes", () => {
+  const setup = tradeMcpToolFailure("create_inspection_request", new TradeAgentIdentityError("Private setup details"));
+  const setupBody = JSON.parse(setup.content[0]!.text);
+  assert.equal(setup.isError, true);
+  assert.equal(setupBody.status, "REJECTED");
+  assert.equal(setupBody.code, "RECEPTIONIST_SETUP_REQUIRED");
+  assert.match(setupBody.message, /did not submit/);
+  assert.doesNotMatch(setupBody.message, /Private setup details/);
+  const uncertain = JSON.parse(tradeMcpToolFailure("create_inspection_request", new Error("lost response")).content[0]!.text);
+  assert.equal(uncertain.status, "UNKNOWN");
+  assert.match(uncertain.message, /original requestKey/);
+  const read = JSON.parse(tradeMcpToolFailure("get_available_slots", new Error("unavailable")).content[0]!.text);
+  assert.equal(read.status, "UNAVAILABLE");
+  assert.match(read.message, /do not invent availability/i);
+});
 
 test("Trade resolves the existing DID owner_id and re-reads changed mappings without a branch", async () => {
   let mapping: DidMappingRow | null = { did: tenant.did, tenant_id: "tenant-a", queue_id: "queue-blue", label: "Trade", owner_id: "business-a", workshop_name: "Trade A", branch_id: "", branch_name: "" };

@@ -203,13 +203,13 @@ function createMcpSession(configuration: TenantConfiguration): McpSession {
   );
 
   server.tool("get_available_slots",
-    "Get available DROP-OFF times for the assigned Black workshop branch and selected services. These are not exclusive mechanic appointments. Use the returned branch timezone and slotToken. Staff approval is required for a booking.",
+    "Get available DROP-OFF times for the assigned Black workshop branch and selected services. These are not exclusive mechanic appointments. Use the returned branch timezone and slotToken. The workshop's AI permission determines whether Sophie may confirm; only a CONFIRMED creation result means the booking is confirmed.",
     availabilityArguments.shape,
     async args => textResult(await bookingTools.getAvailableSlots(args)),
   );
   if (process.env.AI_MCP_BOOKINGS_ENABLED === "true") {
     server.tool("create_booking",
-      "Submit a Black booking request for STAFF APPROVAL. Use a slotToken from get_available_slots. Collect the customer's name, email and phone, read back the service, branch, date and local drop-off time, and get explicit confirmation. Say submitted for approval only for PENDING_REVIEW. Never say confirmed. Reuse the same details on retries; transfer to staff for UNKNOWN/PROCESSING results.",
+      "Create a Black booking using a slotToken from get_available_slots. Collect the customer's name, email and phone, read back the service, branch, date and local drop-off time, and get explicit confirmation before submitting. Say confirmed only when the result status is CONFIRMED. If PENDING_REVIEW, explain that the workshop must review it. Reuse the same details on retries; transfer to staff for UNKNOWN/PROCESSING results.",
       bookingArguments.shape,
       async args => textResult(await bookingTools.createBooking(args)),
     );
