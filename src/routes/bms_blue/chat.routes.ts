@@ -10,6 +10,16 @@ import {
   proxyBlueSupportChatSendMessage,
 } from "../../services/bms_blue/blue-support-chat.proxy.service.js";
 import {
+  proxyBlueCallCenterChatAction,
+  proxyBlueCallCenterChatMessages,
+  proxyBlueCallCenterChatReviewed,
+  proxyBlueCallCenterChatStartWithOwner,
+  proxyBlueCallCenterChatWorkshopOwners,
+  proxyBlueCallCenterChatsList,
+} from "../../services/bms_blue/blue-chats.proxy.service.js";
+import {
+  pickQuery,
+  requiredParam,
   resolveFirebaseBlueProxyContext,
   runBlueProxy,
   singleQuery,
@@ -247,5 +257,72 @@ router.post(
     );
   }
 );
+
+// ── Call-center direct chat (agent ↔ business owner, `cc_…` ids) ─────────────
+
+/** GET /api/bms-blue/chats?limit= — Upstream: GET /api/call-center/chats → `{ ok, assigned, queue }` */
+router.get("/chats", attachSupabaseUser, async (req, res) => {
+  const ctx = await resolveFirebaseBlueProxyContext(res);
+  if (!ctx) return;
+  await runBlueProxy(res, () =>
+    proxyBlueCallCenterChatsList(ctx.firebaseIdToken, pickQuery(req, ["limit"]))
+  );
+});
+
+/** GET /api/bms-blue/chats/workshop-owners — business owners the agent can message. */
+router.get("/chats/workshop-owners", attachSupabaseUser, async (_req, res) => {
+  const ctx = await resolveFirebaseBlueProxyContext(res);
+  if (!ctx) return;
+  await runBlueProxy(res, () => proxyBlueCallCenterChatWorkshopOwners(ctx.firebaseIdToken));
+});
+
+/** POST /api/bms-blue/chats/start-with-owner — body forwarded as-is (see Trade start-with-owner route). */
+router.post("/chats/start-with-owner", attachSupabaseUser, async (req, res) => {
+  const ctx = await resolveFirebaseBlueProxyContext(res);
+  if (!ctx) return;
+  await runBlueProxy(res, () =>
+    proxyBlueCallCenterChatStartWithOwner(ctx.firebaseIdToken, req.body)
+  );
+});
+
+/** GET /api/bms-blue/chats/:chatId/messages?limit=&before= */
+router.get("/chats/:chatId/messages", attachSupabaseUser, async (req, res) => {
+  const ctx = await resolveFirebaseBlueProxyContext(res);
+  if (!ctx) return;
+  const chatId = requiredParam(res, req.params.chatId, "chat id");
+  if (!chatId) return;
+  await runBlueProxy(res, () =>
+    proxyBlueCallCenterChatMessages(ctx.firebaseIdToken, chatId, pickQuery(req, ["limit", "before"]))
+  );
+});
+
+/**
+ * POST /api/bms-blue/chats/:chatId/messages
+ * POST /api/bms-blue/chats/:chatId/claim
+ * POST /api/bms-blue/chats/:chatId/close
+ * POST /api/bms-blue/chats/:chatId/read
+ */
+for (const action of ["messages", "claim", "close", "read"] as const) {
+  router.post(`/chats/:chatId/${action}`, attachSupabaseUser, async (req, res) => {
+    const ctx = await resolveFirebaseBlueProxyContext(res);
+    if (!ctx) return;
+    const chatId = requiredParam(res, req.params.chatId, "chat id");
+    if (!chatId) return;
+    await runBlueProxy(res, () =>
+      proxyBlueCallCenterChatAction(ctx.firebaseIdToken, chatId, action, req.body)
+    );
+  });
+}
+
+/** PATCH /api/bms-blue/chats/:chatId/reviewed */
+router.patch("/chats/:chatId/reviewed", attachSupabaseUser, async (req, res) => {
+  const ctx = await resolveFirebaseBlueProxyContext(res);
+  if (!ctx) return;
+  const chatId = requiredParam(res, req.params.chatId, "chat id");
+  if (!chatId) return;
+  await runBlueProxy(res, () =>
+    proxyBlueCallCenterChatReviewed(ctx.firebaseIdToken, chatId, req.body)
+  );
+});
 
 export default router;
