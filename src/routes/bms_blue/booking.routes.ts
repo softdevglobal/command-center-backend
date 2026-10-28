@@ -28,6 +28,11 @@ import {
  */
 const router = Router();
 
+/** `X-Tenant-Id` header wins; falls back to a `businessId` sent in the query or body. */
+function tenantIdFrom(req: Request, fallbackBusinessId: string): string {
+  return optionalTenantId(req) ?? fallbackBusinessId;
+}
+
 /**
  * GET /api/bms-blue/getallbooking?status=&date=&phone=&createdSource=&limit=&all=
  * Upstream: GET {BLUE_API_BASE_URL}/api/call-center/bookings
@@ -43,20 +48,21 @@ router.get("/getallbooking", attachSupabaseUser, async (req, res) => {
 });
 
 /**
- * GET /api/bms-blue/bookings/availability?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/bms-blue/bookings/availability?from=YYYY-MM-DD&to=YYYY-MM-DD[&businessId=]
  * Upstream: GET /api/call-center/bookings/availability — `{ ok, unavailable: [...] }`.
- * Range must be 1–90 days.
+ * Business comes from `X-Tenant-Id`, or the `businessId` query param. Range must be 1–90 days.
  */
 router.get("/bookings/availability", attachSupabaseUser, async (req, res) => {
-  const ctx = await resolveBlueTenantProxyContext(req, res);
+  const tenantId = tenantIdFrom(req, singleQuery(req.query.businessId));
+  const ctx = await resolveFirebaseBlueProxyContext(res);
   if (!ctx) return;
   const query = pickQuery(req, ["from", "to"]);
-  if (!query.from || !query.to) {
-    res.status(400).json({ error: "Missing required query parameters: from, to." });
+  if (!tenantId || !query.from || !query.to) {
+    res.status(400).json({ error: "Missing required parameters: X-Tenant-Id (or businessId), from, to." });
     return;
   }
   await runBlueProxy(res, () =>
-    proxyBlueCallCenterBookingAvailability(ctx.firebaseIdToken, ctx.tenantId, query)
+    proxyBlueCallCenterBookingAvailability(ctx.firebaseIdToken, tenantId, query)
   );
 });
 
@@ -93,10 +99,20 @@ router.get("/staff", attachSupabaseUser, async (req, res) => {
  *   address: { street, suburb, state, postcode }, preferredSlots: [{ date, timeRange }], customerNotes? }`
  */
 router.post("/bookings", attachSupabaseUser, async (req, res) => {
-  const ctx = await resolveBlueTenantProxyContext(req, res);
+  const body: unknown = req.body;
+  const bodyBusinessId =
+    body && typeof body === "object" && !Array.isArray(body) && typeof (body as { businessId?: unknown }).businessId === "string"
+      ? ((body as { businessId: string }).businessId).trim()
+      : "";
+  const tenantId = tenantIdFrom(req, bodyBusinessId);
+  const ctx = await resolveFirebaseBlueProxyContext(res);
   if (!ctx) return;
+  if (!tenantId) {
+    res.status(400).json({ error: "Missing X-Tenant-Id header or businessId in body." });
+    return;
+  }
   await runBlueProxy(res, () =>
-    proxyBlueCallCenterCreateBooking(ctx.firebaseIdToken, ctx.tenantId, req.body)
+    proxyBlueCallCenterCreateBooking(ctx.firebaseIdToken, tenantId, req.body)
   );
 });
 

@@ -8,6 +8,7 @@ import { getBlackAgentIdToken } from "./black-agent-identity.service.js";
 import { proxyBlackCallCenterBookingAvailability } from "../bms_black/black-call-center-bookings.proxy.service.js";
 import { blackCallCenterFetch } from "../bms_black/black-call-center.proxy.util.js";
 import { localCalendar } from "./front-office-booking.service.js";
+import { staffAssignmentResult } from "./staff-assignment-result.js";
 
 async function readJsonResponse(response: Response, label: string): Promise<unknown> {
   if (!response.ok) {
@@ -123,7 +124,9 @@ export const blackFrontOfficeAdapter: FrontOfficeBrandAdapter = {
     if (response.status === 202 || body.status === "PROCESSING") return {status:"PROCESSING",message:"The request is still processing. Retry with the same details or transfer to staff; do not claim a booking was saved."};
     if (response.status === 409) return {status:"CONFLICT",message:"The request could not be submitted because availability or request details changed. Check availability again or transfer to staff."};
     if (!response.ok) return {status:response.status >= 500 ? "UNKNOWN" : "REJECTED",message:"The request could not be verified. Transfer to staff; do not claim it was saved."};
-    if (body.aiBookingContractVersion !== 1 || body.success !== true || typeof body.bookingId !== "string" || typeof body.bookingCode !== "string" || !["Pending","AwaitingStaffApproval"].includes(String(body.status))) return {status:"UNKNOWN",message:"The API returned an unexpected booking result. Ask staff to verify it before retrying."};
-    return {status:"PENDING_REVIEW",bookingId:body.bookingId,bookingCode:body.bookingCode,upstreamStatus:String(body.status),message:"Your booking request has been submitted for staff approval. This is not yet a confirmed appointment."};
+    if (body.aiBookingContractVersion !== 1 || body.success !== true || typeof body.bookingId !== "string" || typeof body.bookingCode !== "string" || !["Pending","AwaitingStaffApproval","Confirmed"].includes(String(body.status))) return {status:"UNKNOWN",message:"The API returned an unexpected booking result. Ask staff to verify it before retrying."};
+    const confirmed = body.status === "Confirmed";
+    const staffAssignment = staffAssignmentResult(body.staffAssignment, confirmed);
+    return {status:confirmed ? "CONFIRMED" : "PENDING_REVIEW",bookingId:body.bookingId,bookingCode:body.bookingCode,upstreamStatus:String(body.status),...(staffAssignment ? {staffAssignment} : {}),message:confirmed ? "The booking is confirmed and staff have been assigned." : "The booking request has been submitted for workshop review. Do not describe it as confirmed."};
   },
 };

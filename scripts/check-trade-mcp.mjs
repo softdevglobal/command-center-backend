@@ -59,13 +59,13 @@ async function main() {
     const to = new Date(Date.parse(`${from}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10);
     const availability = await read('get_available_slots', {from, to});
     if (availability.brand !== 'trade' || !Array.isArray(availability.unavailable)) throw new Error('Invalid availability result.');
-    console.log(`Availability verified ${from} to ${to}: ${availability.unavailable.length} unavailable sessions. Other sessions still require staff review.`);
+    console.log(`Availability verified ${from} to ${to}: ${availability.unavailable.length} unavailable sessions. Other sessions are preferences; only an explicit confirmed submission result confirms a visit.`);
     console.log('Read-only check passed. No OpenAI call, inspection request, notification or booking was created.');
   } catch {
     const hint = httpStatus === 404 ? 'Trade is disabled or the route is missing; restart the backend after setting its Trade flags.' :
       httpStatus === 401 ? 'Check the credential and the DID mapping.' :
-      httpStatus === 403 ? 'Check the mapped Blue business, active status and unique booking slug.' :
-      'Check the local backend, Firebase Blue, DID mapping and Trade API URL.';
+      httpStatus === 403 ? 'Check the mapped Blue business and its active status.' :
+      'Check Firebase Blue credentials, create an active scoped Trade AI receptionist account, and verify the DID mapping and Trade API URL.';
     throw new Error(`Trade readiness failed during ${phase}${httpStatus ? ` (HTTP ${httpStatus})` : ''}. ${hint}`);
   } finally { await client.close().catch(() => {}); }
 }

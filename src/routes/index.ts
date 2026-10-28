@@ -49,6 +49,7 @@ import openAiLiveRoutes from "./ai/openai-live.routes.js";
 import { onboardingRouters } from "./ai/onboarding.routes.js";
 import onboardingCallRoutes from "./ai/onboarding-call.routes.js";
 import aiAgentActivityRoutes from "./ai/ai-agent-activity.routes.js";
+import sophieMailRoutes from "./sophie-mail.routes.js";
 
 const router = Router();
 
@@ -93,9 +94,11 @@ router.use("/bms-blue", bmsBlueBookingRoutes);
 router.use("/bms-blue", bmsBlueCatalogRoutes);
 router.use("/bms-blue", bmsBlueActivityRoutes);
 router.use("/bms-blue", bmsBlueSupportChatRoutes);
+router.use("/bms-blue", bmsBlueBookingRoutes);
 router.use("/ai/mock/voice", aiMockVoiceRoutes);
 router.use("/ai/openai/live", openAiLiveRoutes);
 router.use("/ai/agent-activity", aiAgentActivityRoutes);
+router.use("/super-admin/sophie-mail", sophieMailRoutes);
 router.use("/ai/mcp/black", yeastarMcpRoutes);
 router.use("/ai/mcp/trade", tradeMcpRoutes);
 router.use("/ai/mcp/route", voiceRouteRoutes);

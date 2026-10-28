@@ -36,7 +36,8 @@ export type FrontOfficeBookingInput = {
   vehicleType?:"small_car"|"sedan_wagon"|"suv"|"ute_van_4wd"|"performance_large"|undefined;
 };
 export type FrontOfficeBookingResult = {
-  status:"PENDING_REVIEW"|"PROCESSING"|"CONFLICT"|"REJECTED"|"UNKNOWN";
+  status:"CONFIRMED"|"PENDING_REVIEW"|"PROCESSING"|"CONFLICT"|"REJECTED"|"UNKNOWN";
   bookingId?:string; bookingCode?:string; upstreamStatus?:string;
   message:string;
+  staffAssignment?: import("./staff-assignment-result.js").StaffAssignmentResult;
 };
