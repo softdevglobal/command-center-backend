@@ -8,10 +8,10 @@ import {
 } from "../src/services/bms_blue/blue-booking.proxy.service.js";
 
 test("Blue booking proxy requires a Blue token and uses only protected Trade endpoints", async () => {
-  const previousBase = process.env.TRADE_API_BASE_URL;
+  const previousBase = process.env.BLUE_API_BASE_URL;
   const previousFetch = globalThis.fetch;
   const calls: { url: URL; init?: RequestInit }[] = [];
-  process.env.TRADE_API_BASE_URL = "https://trade.example.test";
+  process.env.BLUE_API_BASE_URL = "https://trade.example.test";
   globalThis.fetch = async (input, init) => {
     calls.push({ url: new URL(String(input)), init });
     return Response.json({ ok: true });
@@ -30,13 +30,13 @@ test("Blue booking proxy requires a Blue token and uses only protected Trade end
     assert.equal(calls[1]!.url.pathname, "/api/call-center/bookings");
     assert.equal(calls[1]!.init?.body, JSON.stringify(payload));
     assert.equal(calls[1]!.init?.redirect, "error");
-    process.env.TRADE_API_BASE_URL = "http://trade.example.test";
+    process.env.BLUE_API_BASE_URL = "http://trade.example.test";
     assert.throws(() => proxyBlueBookingInspectionRequest("agent-token", payload), /requires HTTPS/);
     assert.equal(calls.length, 2);
   } finally {
     globalThis.fetch = previousFetch;
-    if (previousBase === undefined) delete process.env.TRADE_API_BASE_URL;
-    else process.env.TRADE_API_BASE_URL = previousBase;
+    if (previousBase === undefined) delete process.env.BLUE_API_BASE_URL;
+    else process.env.BLUE_API_BASE_URL = previousBase;
   }
 });
 
