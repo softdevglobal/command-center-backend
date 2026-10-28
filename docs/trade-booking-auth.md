@@ -11,7 +11,7 @@ before enabling writes again. There is no guest fallback.
 1. Deploy the new Trade booking endpoints and the updated Command Center backend
    and dashboard. Use the same Firebase Blue project in Trade and Command Center.
 2. Configure the backend's existing `FIREBASE_BLUE_*` Admin credentials,
-   `FIREBASE_BLUE_WEB_API_KEY`, and `TRADE_API_BASE_URL` (origin only; locally
+   `FIREBASE_BLUE_WEB_API_KEY`, and `BLUE_API_BASE_URL` (origin only; locally
    `http://localhost:3001`). Never use a Black Firebase key here.
 3. Create a Blue DID mapping with the Trade business document ID in `owner_id`,
    a Blue queue, and no Black branch.
