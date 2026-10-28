@@ -1,7 +1,11 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
 
 import type { SupabaseAuthLocals } from "../../middleware/supabase-auth.middleware.js";
 import { getFirebaseBlueIdTokenForSupabaseUser } from "../../services/auth/firebase-blue-login.store.js";
+import { singleHeader } from "../bms_black/black-proxy.helpers.js";
+
+export { optionalTenantId } from "../bms_black/black-proxy.helpers.js";
+export { pickQuery, requiredParam } from "../bms_pink/pink-proxy.helpers.js";
 
 const NO_FIREBASE_TOKEN_ERROR =
   "No stored Firebase Blue idToken for this user. Sign in again with POST /api/auth/login while FIREBASE_BLUE_WEB_API_KEY is set and Firebase accepts the same password.";
@@ -54,6 +58,29 @@ export async function resolveFirebaseBlueProxyContext(
   }
 
   return { firebaseIdToken };
+}
+
+export type BlueTenantProxyContext = FirebaseBlueProxyContext & {
+  tenantId: string;
+};
+
+/** Requires `X-Tenant-Id` (Trade businessId) — every business-scoped Trade call-center route needs it. */
+export async function resolveBlueTenantProxyContext(
+  req: Request,
+  res: Response
+): Promise<BlueTenantProxyContext | null> {
+  const base = await resolveFirebaseBlueProxyContext(res);
+  if (!base) return null;
+
+  const tenantId = singleHeader(req.headers["x-tenant-id"]);
+  if (!tenantId) {
+    res.status(400).json({
+      error: "Missing X-Tenant-Id header (businessId for BMS Trade call-center scope).",
+    });
+    return null;
+  }
+
+  return { ...base, tenantId };
 }
 
 export async function runBlueProxy(

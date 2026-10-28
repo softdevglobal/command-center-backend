@@ -363,6 +363,9 @@ BLACK_ADMIN_BASE_URL=https://black.bmspros.com.au
 # BMS Pink API base for /api/bms-pink/* (optional; has a default)
 PINK_API_BASE_URL=https://pink.bmspros.com.au
 
+# BMS Trade (Blue) API base for /api/bms-blue/* (defaults to a local Trade server)
+BLUE_API_BASE_URL=http://127.0.0.1:3000
+
 # TextBee SMS (optional)
 TEXTBEE_API_KEY=...
 TEXTBEE_DEVICE_ID=...
@@ -468,6 +471,7 @@ Private keys may contain literal `\n` which is normalized to real newlines.
 | `BLACK_API_BASE_URL` | `https://black.bmspros.com.au` | Base URL of the BMS Black REST API. |
 | `BLACK_ADMIN_BASE_URL` | `https://black.bmspros.com.au` | Public HTTPS Black site used for owner login and account setup links. Keep this public URL even when `BLACK_API_BASE_URL` points to a local Black server. |
 | `PINK_API_BASE_URL` | `https://pink.bmspros.com.au` | Base URL of the BMS Pink REST API, used by the `/api/bms-pink/*` proxy routes. |
+| `BLUE_API_BASE_URL` | `http://127.0.0.1:3000` | Base URL of the BMS Trade (Blue) REST API, used by the `/api/bms-blue/*` proxy routes. Set it to the deployed Trade URL in production. |
 
 ### Bootstrap secret
 
