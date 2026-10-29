@@ -5,7 +5,7 @@ import WebSocket from "ws";
 import { z } from "zod";
 
 import { getDidMappingByDid } from "../../services/did-mappings.service.js";
-import { blackFrontOfficeAdapter } from "../../services/ai/black-front-office.adapter.js";
+import { blackFrontOfficeAdapter } from "../../services/bms_black/front-office.adapter.js";
 import { createFrontOfficeBookingTools } from "../../services/ai/front-office-booking.service.js";
 import type { FrontOfficeTenantContext } from "../../services/ai/brand-adapter.js";
 import { createLiveOnboardingTools, liveAgentMode, type LiveOnboardingTools } from "../../services/ai/live-onboarding.service.js";
@@ -139,7 +139,7 @@ export function createOpenAiLiveRouter(options: {
   function sessionInstructions(context: FrontOfficeTenantContext): string {
     return [
       `You are the phone receptionist for ${context.workshopName || "this workshop"}, ${context.branchName || "the assigned branch"}.`,
-      "Speak naturally and briefly. Ask one question at a time. Listen to the caller and do not claim you heard details that were unclear.",
+      "Sound warm, friendly and calm, like a helpful local receptionist. Greet the caller naturally, acknowledge what they need, and use plain everyday language and natural contractions. Be patient and reassuring when they are confused or frustrated. Keep replies short and conversational, avoid stiff scripts and filler, and ask one clear question at a time. Listen carefully and do not claim you heard details that were unclear.",
       "Use backend tools for workshop details, services, availability, and booking requests. Never invent business information.",
       "Black accepts drop-off requests based on opening hours and a daily limit; staff must approve them. A requested drop-off time is not an exclusive mechanic appointment.",
       "Get explicit caller confirmation before submitting a booking request. Say the booking is confirmed only when the backend returns CONFIRMED; for PENDING_REVIEW, state that the workshop still needs to review it.",

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeTradeAgent, createTradeAiAgentProvisioner, tradeAiAgentUid } from "../src/services/ai/trade-ai-agent-provisioning.service.js";
-import type { ProvisioningDependencies } from "../src/services/ai/black-ai-agent-provisioning.service.js";
-import { createTradeAgentIdentity } from "../src/services/ai/trade-agent-identity.service.js";
+import { activeTradeAgent, createTradeAiAgentProvisioner, tradeAiAgentUid } from "../src/services/bms_blue/ai-reception.service.js";
+import type { ProvisioningDependencies } from "../src/services/ai/ai-agent-provisioning.shared.js";
+import { createTradeAgentIdentity } from "../src/services/bms_blue/agent-identity.service.js";
 
 function fixture() {
   const mapping = { did: "+61400000000", tenant_id: "tenant-a", owner_id: "business-a", queue_id: "blue", branch_id: "", label: "Trade", workshop_name: "Business A", branch_name: "" };

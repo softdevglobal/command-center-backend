@@ -38,10 +38,12 @@ export async function proxyPinkCallCenterBookingAvailability(
 export async function proxyPinkCallCenterCreateBooking(
   firebaseIdToken: string,
   tenantId: string,
-  body: unknown
+  body: unknown,
+  requestKey?: string
 ): Promise<Response> {
   return pinkCallCenterFetch(PINK_BOOKINGS_PATH, firebaseIdToken, {
     ...pinkJsonInit("POST", body),
+    ...(requestKey ? { headers: { "Content-Type": "application/json", "Idempotency-Key": requestKey }, signal: AbortSignal.timeout(25000) } : {}),
     tenantId,
   });
 }

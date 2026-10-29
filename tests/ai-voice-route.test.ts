@@ -21,6 +21,13 @@ test("Black DID routing requires its mapped branch and preserves the Black queue
   assert.deepEqual(await resolveVoiceProductForDid(mapping.did, mappingLookup, queueLookup), { brand: "black", did: mapping.did });
 });
 
+test("Pink DID routing follows its Pink queue and requires a salon branch", async () => {
+  const mapping = { ...base, did: "0359111425", queue_id: "q-pink-001", branch_id: "salon-branch" };
+  const queueLookup = async (queueId: string, tenantId: string) => ({ id: queueId, name: "Pink Queue", type: "pink", tenant_id: tenantId });
+  assert.deepEqual(await resolveVoiceProductForDid(mapping.did, async did => did === mapping.did ? mapping : null, queueLookup), { brand: "pink", did: mapping.did });
+  await assert.rejects(resolveVoiceProductForDid(mapping.did, async did => did === mapping.did ? { ...mapping, branch_id: "" } : null, queueLookup));
+});
+
 test("voice product routing rejects missing, duplicate, cross-tenant and structurally invalid mappings", async () => {
   await assert.rejects(resolveVoiceProductForDid("0359111403", async () => null, async () => null));
   await assert.rejects(resolveVoiceProductForDid("0359111403", async did => did.startsWith("+") ? { ...base, did: `+${base.did}` } : base, async () => ({ id: base.queue_id, name: "Blue Queue", type: "blue", tenant_id: base.tenant_id })));

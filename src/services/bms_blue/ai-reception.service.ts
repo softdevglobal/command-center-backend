@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import admin from "firebase-admin";
 import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
 import { getDidMappingByDid, listDidMappings } from "../did-mappings.service.js";
-import { resolveVoiceProductForDid } from "./voice-route.service.js";
-import { AiAgentSetupError, type ProvisioningDependencies } from "./black-ai-agent-provisioning.service.js";
+import { resolveVoiceProductForDid } from "../ai/voice-route.service.js";
+import { AiAgentSetupError, type ProvisioningDependencies } from "../ai/ai-agent-provisioning.shared.js";
 
 export function tradeAiAgentUid(did: string): string {
   return `ai-trade-${createHash("sha256").update(did.replace(/^\+/, "")).digest("hex").slice(0, 40)}`;

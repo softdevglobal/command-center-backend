@@ -20,8 +20,8 @@ async function getQueueRoute(queueId: string, tenantId: string): Promise<QueueRo
   return data as QueueRoute | null;
 }
 
-function hasBlueToken(value: unknown): boolean {
-  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).includes("blue");
+function hasProductToken(value: unknown, product: string): boolean {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).includes(product);
 }
 
 /** Resolve product from the same queue identity used by the admin panel's queue routing. */
@@ -29,7 +29,7 @@ export async function resolveVoiceProductForDid(
   did: string,
   lookup: MappingLookup = getDidMappingByDid,
   queueLookup: QueueLookup = getQueueRoute,
-): Promise<{ brand: "black" | "trade"; did: string }> {
+): Promise<{ brand: "black" | "trade" | "pink"; did: string }> {
   if (!/^\d{6,15}$/.test(did)) throw new Error("Invalid DID.");
   const mappings = (await Promise.all([lookup(did), lookup(`+${did}`)])).filter((row): row is DidMappingRow => row !== null);
   if (mappings.length !== 1) throw new Error("DID mapping is missing or ambiguous.");
@@ -37,7 +37,11 @@ export async function resolveVoiceProductForDid(
   if (!mapping.tenant_id || !mapping.queue_id || !mapping.owner_id) throw new Error("DID mapping is incomplete.");
   const queue = await queueLookup(mapping.queue_id, mapping.tenant_id);
   if (!queue || queue.tenant_id !== mapping.tenant_id) throw new Error("DID queue mapping is invalid.");
-  if ([queue.id, queue.name, queue.type].some(hasBlueToken)) {
+  if ([queue.id, queue.name, queue.type].some(value => hasProductToken(value, "pink"))) {
+    if (!mapping.branch_id?.trim()) throw new Error("Pink DID mapping requires a branch.");
+    return { brand: "pink", did };
+  }
+  if ([queue.id, queue.name, queue.type].some(value => hasProductToken(value, "blue"))) {
     if (mapping.branch_id?.trim()) throw new Error("Blue DID mapping must not include a Black branch.");
     return { brand: "trade", did };
   }

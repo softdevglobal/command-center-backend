@@ -1,6 +1,6 @@
 import admin from "firebase-admin";
 import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
-import { activeTradeAgent, mappedTradeBusiness, tradeAiAgentUid } from "./trade-ai-agent-provisioning.service.js";
+import { activeTradeAgent, mappedTradeBusiness, tradeAiAgentUid } from "./ai-reception.service.js";
 
 type Identity = { token: string; expiresAt: number };
 export class TradeAgentIdentityError extends Error {

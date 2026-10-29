@@ -34,10 +34,10 @@ It verifies the business, services and authenticated availability without
 creating an inspection or sending customer notifications. A missing Trade AI
 account fails the availability step rather than using the guest endpoint.
 
-The super-admin API also supports `GET /api/super-admin/ai-agents?brand=trade`
-and `POST /api/super-admin/ai-agents` with `{ "brand": "trade", "did": "...",
-"name": "AI Receptionist" }`. Both require a real super-admin session;
-setup-secret authentication cannot create identities.
+Trade receptionist administration is grouped under the Trade product API:
+`GET /api/bms-blue/ai-reception` lists mapped numbers and account state, while
+`POST /api/bms-blue/ai-reception` accepts `{ "did": "...", "name": "AI Receptionist" }`.
+Both require a real super-admin session; setup-secret authentication cannot create identities.
 
 ## Authorization
 

@@ -8,7 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createOnboardingService, OnboardingError, type OnboardingRecord, type OnboardingRepository, type OnboardingDependencies } from "../src/services/ai/onboarding.service.js";
 import { onboardingConfiguration, missingOnboardingInformation } from "../src/services/ai/onboarding.schemas.js";
-import { AiAgentSetupError, createAiAgentProvisioner } from "../src/services/ai/black-ai-agent-provisioning.service.js";
+import { AiAgentSetupError, createAiAgentProvisioner } from "../src/services/bms_black/ai-reception.service.js";
 import { createLiveOnboardingTools, onboardingDraftIdForCall, liveAgentMode } from "../src/services/ai/live-onboarding.service.js";
 import { createOpenAiLiveRouter } from "../src/routes/ai/openai-live.routes.js";
 import WebSocket, { WebSocketServer } from "ws";
@@ -78,7 +78,8 @@ function fixture(notifications: Pick<OnboardingDependencies, "notifyOwnerReview"
 
 function newBusinessConfiguration() {
   return { ...completeConfig, setupMode: "new_business" as const, branchName: "New workshop", capacity: 2, bookingLimitPerDay: 8,
-    business: { ...completeConfig.business, gstRegistered: true },
+    business: { ...completeConfig.business, gstRegistered: true, businessStructure: "sole_trader" as const, state: "VIC" as const, postcode: "3000" },
+    blackBusinessType: "mechanic" as const, blackPlanId: "black-starter", blackPlanName: "Black Starter",
     services: [{ ...completeConfig.services[0]!, gstInclusive: true, vehicleTypePricing: { small_car: { price: 120, duration: 60 } } }],
     staff: [{ ...completeConfig.staff[0]!, email: "staff@example.test", workingDays: [1], serviceNames: ["Diagnostic"] }],
   };
@@ -91,7 +92,7 @@ test("new Black and Trade business onboarding does not require receptionist setu
   const draft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0, configuration: black });
   assert.equal((await f.service.submitForReview(operator, { draftId: draft.draftId, expectedVersion: draft.version })).status, "owner_review");
   const trade = { setupMode: "new_business" as const, product: "trade" as const, business: black.business, terms: black.terms,
-    tradeBusiness: { businessType: "Plumbing" as const, businessStructure: "Sole Trader" as const, state: "VIC" as const, postcode: "3000", serviceAreas: ["Melbourne"] } };
+    tradeBusiness: { businessType: "Plumbing" as const, businessStructure: "Sole Trader" as const, state: "VIC" as const, postcode: "3000", serviceAreas: ["Melbourne"] }, tradePlanId: "trade-starter", tradePlanName: "Trade Starter" };
   assert.deepEqual(missingOnboardingInformation(trade), []);
   const tradeDraft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0, configuration: trade });
   assert.equal((await f.service.submitForReview(operator, { draftId: tradeDraft.draftId, expectedVersion: tradeDraft.version })).status, "owner_review");
@@ -118,14 +119,15 @@ test("new Black business review uses verified owner email without requiring a pr
   assert.equal((result.provisioningResult as { status: string }).status, "TEST_MODE");
 });
 
-test("new business setup blocks missing pricing, GST choices, staff emails and schedules before owner review", async () => {
+test("new Black signup requires its business details and plan, leaving workshop configuration until after signup", async () => {
   const f = fixture();
   const saved = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0,
     configuration: { ...completeConfig, setupMode: "new_business" } });
-  assert.ok(saved.missingInformation.includes("branchName"));
-  assert.ok(saved.missingInformation.includes("services.0.vehicleTypePricing"));
+  assert.ok(saved.missingInformation.includes("business.businessStructure"));
+  assert.ok(saved.missingInformation.includes("blackBusinessType"));
   assert.ok(saved.missingInformation.includes("business.gstRegistered"));
-  assert.ok(saved.missingInformation.includes("staff.0.unique_email"));
+  assert.ok(saved.missingInformation.includes("blackPlanId"));
+  assert.ok(!saved.missingInformation.includes("staff.0.unique_email"));
   await assert.rejects(f.service.submitForReview(operator, { draftId: saved.draftId, expectedVersion: saved.version }), errorCode("INCOMPLETE_SETUP"));
 });
 
@@ -174,7 +176,7 @@ test("only one concurrent draft update succeeds", async () => {
   assert.equal(results.filter(result => result.status === "rejected").length, 1);
 });
 
-test("Pink and Trade cannot reach review before their adapters exist", async () => {
+test("Pink and Trade reject unsupported existing-business onboarding", async () => {
   for (const product of ["pink", "trade"] as const) {
     const f = fixture();
     const draft = await f.service.saveDraft(operator, { draftId: randomUUID(), expectedVersion: 0, configuration: { ...completeConfig, product } });
@@ -464,7 +466,7 @@ test("voice tools cannot choose another call draft, supply approval or change pu
   await assert.rejects(call.execute("save_onboarding_draft", { configuration: { ownerApproved: true } }));
   await assert.rejects(call.execute("approve_as_owner", {}), errorCode("TOOL_NOT_ALLOWED"));
   await assert.rejects(call.execute("create_booking", {}), errorCode("TOOL_NOT_ALLOWED"));
-  assert.deepEqual(call.tools.map(tool => tool.name).sort(), ["get_onboarding_status", "provision_approved_business", "save_onboarding_draft", "submit_for_owner_review"]);
+  assert.deepEqual(call.tools.map(tool => tool.name).sort(), ["complete_business_onboarding", "get_available_black_subscription_plans", "get_available_pink_subscription_plans", "get_available_trade_subscription_plans", "get_onboarding_status", "save_onboarding_draft"]);
   const saveSchema = call.tools.find(tool => tool.name === "save_onboarding_draft")!.parameters;
   assert.equal(JSON.stringify(saveSchema).includes('"draftId"'), false);
   assert.equal(JSON.stringify(saveSchema).includes('"terms"'), false);

@@ -6,9 +6,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 import { getDidMappingByDid } from "../../services/did-mappings.service.js";
-import { aiAgentUid } from "../../services/ai/black-ai-agent-provisioning.service.js";
+import { aiAgentUid } from "../../services/bms_black/ai-reception.service.js";
 import type { FrontOfficeBrandAdapter, FrontOfficeTenantContext } from "../../services/ai/brand-adapter.js";
-import { blackFrontOfficeAdapter } from "../../services/ai/black-front-office.adapter.js";
+import { blackFrontOfficeAdapter } from "../../services/bms_black/front-office.adapter.js";
 import { availabilityArguments, bookingArguments, createFrontOfficeBookingTools } from "../../services/ai/front-office-booking.service.js";
 
 type TenantConfiguration = {

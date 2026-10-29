@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { DidMappingRow } from "../../types/did-mapping.types.js";
-import type { BlackAiAgentProvisioningInput } from "./black-ai-agent-provisioning.service.js";
+import type { BlackAiAgentProvisioningInput } from "../bms_black/ai-reception.service.js";
 import { blackAdminEndpoint, blackEndpoint } from "../../config/black-api.js";
 import { tradeOwnerReviewUrl, type TradeBusinessResult } from "./trade-business-provisioning.service.js";
+import { pinkOnboardingLoginUrl, type PinkBusinessResult } from "../bms_pink/pink-onboarding.service.js";
 import type { ReviewNotice, ReviewNotifications } from "./onboarding-review-notification.service.js";
 import {
   missingOnboardingInformation, saveOnboardingArguments, onboardingVersionArguments, ownerApprovalArguments,
@@ -17,7 +18,7 @@ export type ExistingOnboardingBinding = { did: string; tenantId: string; ownerUi
 export type OnboardingBinding = ExistingOnboardingBinding | { kind: "new_business"; ownerEmail: string };
 export type OnboardingApproval = { ownerUid: string; reviewedVersion: number; termsVersion: string; approvedAt: string; configurationHash?: string; method?: "phone_confirmation" };
 export type BlackBusinessResult = { status: "TEST_MODE"; ownerUid: string; branchId: string | null; serviceIds: string[]; staffIds: string[]; created: boolean };
-export type OnboardingProvisioningResult = { firebaseBlackUid: string; did: string; name: string; created: boolean } | BlackBusinessResult | TradeBusinessResult;
+export type OnboardingProvisioningResult = { firebaseBlackUid: string; did: string; name: string; created: boolean } | BlackBusinessResult | TradeBusinessResult | PinkBusinessResult;
 export type OwnerIdentity = { uid: string; email?: string | null; emailVerified?: boolean };
 export type OnboardingRecord = {
   id: string;
@@ -44,6 +45,7 @@ export type OnboardingDependencies = {
   provision(input: BlackAiAgentProvisioningInput): Promise<OnboardingProvisioningResult>;
   provisionBlackBusiness?(input: { requestId: string; configuration: OnboardingConfiguration; configurationHash: string; approval: OnboardingApproval }): Promise<BlackBusinessResult>;
   provisionTradeBusiness?(input: { requestId: string; configuration: OnboardingConfiguration; configurationHash: string; approval: OnboardingApproval }): Promise<TradeBusinessResult>;
+  provisionPinkBusiness?(input: { requestId: string; configuration: OnboardingConfiguration; configurationHash: string; approval: OnboardingApproval }): Promise<PinkBusinessResult>;
   notifyOwnerReview?(input: ReviewNotice): Promise<ReviewNotifications>;
   getReviewNotifications?(input: Pick<ReviewNotice, "draftId" | "configurationHash">): Promise<ReviewNotifications>;
   prepareOwnerAccount?(input: { draftId: string; configuration: OnboardingConfiguration }): Promise<{ uid: string; loginUrl: string }>;
@@ -123,14 +125,15 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       reviewNotifications: null as ReviewNotifications | null,
       accountNotifications: null as ReviewNotifications | null,
       loginUrl: row.status === "provisioned" && row.approval?.method === "phone_confirmation"
-        ? row.configuration.product === "trade" ? `${(process.env.TRADE_ADMIN_BASE_URL?.trim() || "https://trade.bmspros.com.au").replace(/\/+$/, "")}/login` : blackAdminEndpoint("/login") : null,
-      ownerReviewUrl: row.status !== "draft" && row.approval?.method !== "phone_confirmation" ? row.configuration.product === "trade" ? tradeOwnerReviewUrl(row.id) : blackEndpoint(`/onboarding/${row.id}`) : null,
+        ? row.configuration.product === "pink" ? pinkOnboardingLoginUrl() : row.configuration.product === "trade" ? `${(process.env.TRADE_ADMIN_BASE_URL?.trim() || "https://trade.bmspros.com.au").replace(/\/+$/, "")}/login` : blackAdminEndpoint("/login") : null,
+      ownerReviewUrl: row.configuration.product !== "pink" && row.status !== "draft" && row.approval?.method !== "phone_confirmation" ? row.configuration.product === "trade" ? tradeOwnerReviewUrl(row.id) : blackEndpoint(`/onboarding/${row.id}`) : null,
       nextAction: row.status === "provisioned" ? row.configuration.product === "trade"
           ? "The Trade business is pending review. Select a subscription plan, complete billing authorization, confirm service setup and approve launch before activating the account."
           : "Complete billing authorization, staff invitations, approved runtime settings and phone routing; run pilot checks and obtain launch approval."
-        : row.status === "owner_review" ? `The ${row.configuration.product === "trade" ? "Trade" : "Black"} business owner must sign in, verify their email and approve this exact setup.`
-        : row.status === "approved" || row.status === "provisioning_failed" ? `Provision the approved ${row.configuration.product === "trade" ? "Trade" : "Black"} business setup.`
+        : row.status === "owner_review" ? `The ${row.configuration.product === "pink" ? "Pink" : row.configuration.product === "trade" ? "Trade" : "Black"} business owner must sign in, verify their email and approve this exact setup.`
+        : row.status === "approved" || row.status === "provisioning_failed" ? `Provision the approved ${row.configuration.product === "pink" ? "Pink" : row.configuration.product === "trade" ? "Trade" : "Black"} business setup.`
         : row.status === "provisioning" ? "Provisioning is in progress; check status before retrying."
+        : row.configuration.product === "pink" ? "Complete the Pink signup details, read them back and obtain explicit permission before completing account creation."
         : "Complete the missing information and submit for owner review.",
     };
   }
@@ -171,8 +174,8 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       const input = onboardingVersionArguments.parse(raw);
       const row = await getOwned(input.draftId, operatorId);
       if (row.version !== input.expectedVersion) throw conflict();
-      if (row.configuration.setupMode !== "new_business" || !["black", "trade"].includes(row.configuration.product ?? ""))
-        throw new OnboardingError(422, "NEW_BUSINESS_REQUIRED", "This flow creates a new Black or Trade business account only.");
+      if (row.configuration.setupMode !== "new_business" || !["black", "trade", "pink"].includes(row.configuration.product ?? ""))
+        throw new OnboardingError(422, "NEW_BUSINESS_REQUIRED", "This flow creates a new Black, Trade or Pink business account only.");
       if (row.status === "provisioned") {
         if (row.approval?.method !== "phone_confirmation") throw new OnboardingError(409, "LEGACY_SETUP", "This account used the earlier owner-review flow. Use its existing login.");
         return accountStatus(row, true);
@@ -195,7 +198,7 @@ export function createOnboardingService(deps: OnboardingDependencies) {
         stage = "CALL_CONFIRMATION_CHECKPOINT";
         claimed = await change(claimed, operatorId, "caller_confirmed_account_setup", { approval: { ownerUid: account.uid, reviewedVersion: row.version,
           termsVersion: row.configuration.terms!.version, approvedAt: now(), configurationHash: row.configuration_hash, method: "phone_confirmation" } });
-        const provision = row.configuration.product === "trade" ? deps.provisionTradeBusiness : deps.provisionBlackBusiness;
+        const provision = row.configuration.product === "pink" ? deps.provisionPinkBusiness : row.configuration.product === "trade" ? deps.provisionTradeBusiness : deps.provisionBlackBusiness;
         if (!provision) throw new OnboardingError(503, "ACCOUNT_SETUP_UNAVAILABLE", "Business account provisioning is unavailable.");
         stage = "BUSINESS_PROVISIONING";
         const result = await provision({ requestId: row.id, configuration: row.configuration, configurationHash: row.configuration_hash, approval: claimed.approval! });
@@ -254,6 +257,8 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       if (row.status !== "draft") throw new OnboardingError(409, "INVALID_STATE", "Only a draft can be submitted for owner review.");
       const missing = missingOnboardingInformation(row.configuration);
       if (missing.length) throw new OnboardingError(422, "INCOMPLETE_SETUP", `Complete these fields before review: ${missing.join(", ")}.`);
+      if (row.configuration.product === "pink")
+        throw new OnboardingError(422, "PHONE_CONFIRMATION_REQUIRED", "Use complete_business_onboarding after the caller confirms the Pink signup details and account creation.");
       const binding = await resolveBinding(row.configuration);
       const submitted = await change(row, operatorId, "submitted_for_owner_review", { status: "owner_review", binding, approval: null });
       return reviewStatus(submitted, true);
@@ -300,7 +305,9 @@ export function createOnboardingService(deps: OnboardingDependencies) {
       let result: OnboardingProvisioningResult;
       try {
         if (claimed.binding && "kind" in claimed.binding) {
-          if (claimed.configuration.product === "trade") {
+          if (claimed.configuration.product === "pink") {
+            throw new OnboardingError(422, "PHONE_CONFIRMATION_REQUIRED", "Complete Pink signup through the confirmed account-creation flow.");
+          } else if (claimed.configuration.product === "trade") {
             if (!deps.provisionTradeBusiness) throw new OnboardingError(503, "TRADE_SETUP_UNAVAILABLE", "Trade business provisioning is not configured.");
             result = await deps.provisionTradeBusiness({ requestId: claimed.id, configuration: claimed.configuration, configurationHash: claimed.configuration_hash, approval: claimed.approval! });
           } else {

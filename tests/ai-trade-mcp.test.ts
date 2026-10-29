@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import tradeRouter, { createTradeMcpServer, tradeMcpToolFailure } from "../src/routes/ai/trade-mcp.routes.js";
-import { TradeAgentIdentityError } from "../src/services/ai/trade-agent-identity.service.js";
+import tradeRouter, { createTradeMcpServer, tradeMcpToolFailure } from "../src/routes/bms_blue/ai-mcp.routes.js";
+import { TradeAgentIdentityError } from "../src/services/bms_blue/agent-identity.service.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { DidMappingRow } from "../src/types/did-mapping.types.js";
-import { resolveTradeDidMapping, authenticateTradeMcpRequest } from "../src/services/ai/trade-front-office.service.js";
+import { resolveTradeDidMapping, authenticateTradeMcpRequest } from "../src/services/bms_blue/front-office.service.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { authenticateTradeMcp, parseTradeMcpTenants, submitTradeOnce, tradeRequestArguments, tradeAvailabilityArguments, type TradeSubmissionStore, type TradeSubmissionResult } from "../src/services/ai/trade-front-office.service.js";
+import { authenticateTradeMcp, parseTradeMcpTenants, submitTradeOnce, tradeRequestArguments, tradeAvailabilityArguments, type TradeSubmissionStore, type TradeSubmissionResult } from "../src/services/bms_blue/front-office.service.js";
 
 const token = "trade-test-credential-".padEnd(40, "x");
 const tenant = { did: "+61400000001", token };
@@ -152,11 +152,11 @@ test("timeouts and lost completion writes never trigger a second upstream submis
 test("HTTP endpoint is gated and rejects unauthenticated clients before database access", async () => {
   const names = ["AI_FEATURE_ENABLED", "AI_VOICE_PROVIDER", "AI_MCP_ENABLED", "AI_MCP_TRADE_ENABLED", "AI_MCP_TRADE_TENANT_CONFIG_JSON"];
   const previous = names.map(name => process.env[name]);
-  const app = express(); app.use(express.json()); app.use("/api/ai/mcp/trade", tradeRouter);
+  const app = express(); app.use(express.json()); app.use("/api/bms-blue/ai/mcp", tradeRouter);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
   const address = server.address(); assert.ok(address && typeof address !== "string");
-  const url = `http://127.0.0.1:${address.port}/api/ai/mcp/trade`;
+  const url = `http://127.0.0.1:${address.port}/api/bms-blue/ai/mcp`;
   try {
     process.env.AI_MCP_TRADE_ENABLED = "false";
     assert.equal((await fetch(url, { method: "POST" })).status, 404);
