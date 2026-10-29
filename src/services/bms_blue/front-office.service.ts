@@ -1,15 +1,15 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { staffAssignmentResult, type StaffAssignmentResult } from "./staff-assignment-result.js";
+import { staffAssignmentResult, type StaffAssignmentResult } from "../ai/staff-assignment-result.js";
 import { z } from "zod";
 import { getDidMappingByDid } from "../did-mappings.service.js";
 import type { DidMappingRow } from "../../types/did-mapping.types.js";
 import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
-import { resolveVoiceProductForDid } from "./voice-route.service.js";
-import { getTradeAgentIdToken } from "./trade-agent-identity.service.js";
+import { resolveVoiceProductForDid } from "../ai/voice-route.service.js";
+import { getTradeAgentIdToken } from "./agent-identity.service.js";
 import {
   proxyBlueBookingInspectionRequest,
   proxyBlueBookingSlotAvailability,
-} from "../bms_blue/blue-booking.proxy.service.js";
+} from "./blue-booking.proxy.service.js";
 
 const documentId = z.string().trim().min(1).max(128).refine(value => !value.includes("/") && value !== "." && value !== "..");
 const tenantSchema = z.object({ did: z.string().trim().regex(/^\+?\d{6,15}$/), token: z.string().trim().min(32) }).strict();

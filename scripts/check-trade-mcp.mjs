@@ -3,7 +3,7 @@ import '../src/env-bootstrap.ts';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-const [did, target = 'http://127.0.0.1:5050/api/ai/mcp/trade'] = process.argv.slice(2);
+const [did, target = 'http://127.0.0.1:5050/api/bms-blue/ai/mcp'] = process.argv.slice(2);
 const usage = 'Usage: npm run check:trade -- <DID digits> [backend MCP URL]';
 const reads = ['get_business_profile', 'list_services', 'get_available_slots'];
 
@@ -13,7 +13,7 @@ async function main() {
   const url = new URL(target);
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) ||
-      url.username || url.password || url.search || url.hash || !/^\/api\/ai\/mcp\/trade\/?$/.test(url.pathname))
+      url.username || url.password || url.search || url.hash || !/^\/api\/bms-blue\/ai\/mcp\/?$/.test(url.pathname))
     throw new Error('Use the Trade MCP HTTPS URL, or local HTTP on localhost.');
   const bridgeSecret = process.env.AI_VOICE_BRIDGE_SECRET?.trim();
   const configured = JSON.parse(process.env.AI_MCP_TRADE_TENANT_CONFIG_JSON || '[]');

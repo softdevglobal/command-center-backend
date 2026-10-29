@@ -3,12 +3,12 @@ import { proxyBlackCallCenterServicesByBranch } from "../bms_black/black-call-ce
 import type {
   FrontOfficeBrandAdapter,
   FrontOfficeTenantContext,
-} from "./brand-adapter.js";
-import { getBlackAgentIdToken } from "./black-agent-identity.service.js";
-import { proxyBlackCallCenterBookingAvailability } from "../bms_black/black-call-center-bookings.proxy.service.js";
-import { blackCallCenterFetch } from "../bms_black/black-call-center.proxy.util.js";
-import { localCalendar } from "./front-office-booking.service.js";
-import { staffAssignmentResult } from "./staff-assignment-result.js";
+} from "../ai/brand-adapter.js";
+import { getBlackAgentIdToken } from "./agent-identity.service.js";
+import { proxyBlackCallCenterBookingAvailability } from "./black-call-center-bookings.proxy.service.js";
+import { blackCallCenterFetch } from "./black-call-center.proxy.util.js";
+import { localCalendar } from "../ai/front-office-booking.service.js";
+import { staffAssignmentResult } from "../ai/staff-assignment-result.js";
 
 async function readJsonResponse(response: Response, label: string): Promise<unknown> {
   if (!response.ok) {

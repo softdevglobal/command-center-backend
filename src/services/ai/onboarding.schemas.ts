@@ -19,6 +19,9 @@ export const onboardingConfiguration = z.object({
   blackBusinessType: z.enum(["auto_repair", "mechanic", "tire_service", "body_shop", "service_center", "detailing", "fleet", "other"]).optional(),
   blackPlanId: shortText.optional(),
   blackPlanName: shortText.optional(),
+  pinkBusinessType: z.enum(["beauty_salon", "hair_salon", "nail_spa", "massage_spa", "barber", "wellness", "medical_spa", "other"]).optional(),
+  pinkPlanId: shortText.regex(/^[^/]+$/).optional(),
+  pinkPlanName: shortText.optional(),
   tradePlanId: shortText.optional(),
   tradePlanName: shortText.optional(),
   branchName: shortText.optional(),
@@ -109,14 +112,20 @@ export function missingOnboardingInformation(config: OnboardingConfiguration): s
     for (const field of ["receptionistName", "did", "escalation", "bookingPolicy", "cancellationPolicy"] as const)
       if (!config[field]) missing.push(field);
   }
-  if (config.product === "black" && config.setupMode === "new_business") {
+  if ((config.product === "black" || config.product === "pink") && config.setupMode === "new_business") {
     for (const field of ["tradingName", "ownerName", "ownerEmail", "ownerPhone", "businessStructure", "state", "postcode", "timezone"] as const) {
       if (!config.business?.[field]) missing.push(`business.${field}`);
     }
     if (config.business?.gstRegistered === undefined) missing.push("business.gstRegistered");
-    if (!config.blackBusinessType) missing.push("blackBusinessType");
-    if (!config.blackPlanId) missing.push("blackPlanId");
-    if (!config.blackPlanName) missing.push("blackPlanName");
+    if (config.product === "black") {
+      if (!config.blackBusinessType) missing.push("blackBusinessType");
+      if (!config.blackPlanId) missing.push("blackPlanId");
+      if (!config.blackPlanName) missing.push("blackPlanName");
+    } else {
+      if (!config.pinkBusinessType) missing.push("pinkBusinessType");
+      if (!config.pinkPlanId) missing.push("pinkPlanId");
+      if (!config.pinkPlanName) missing.push("pinkPlanName");
+    }
   } else if (config.product === "trade" && config.setupMode === "new_business") {
     for (const field of ["tradingName", "ownerName", "ownerEmail", "ownerPhone", "timezone"] as const) {
       if (!config.business?.[field]) missing.push(`business.${field}`);
@@ -136,36 +145,14 @@ export function missingOnboardingInformation(config: OnboardingConfiguration): s
     if (!config.tradeBusiness?.serviceAreas?.length) missing.push("tradeBusiness.serviceAreas");
     if (!config.tradePlanId) missing.push("tradePlanId");
     if (!config.tradePlanName) missing.push("tradePlanName");
-  } else if (config.product === "black" && config.setupMode === "new_business") {
-    // Black owners complete their business profile and configure the workshop after login.
+  } else if ((config.product === "black" || config.product === "pink") && config.setupMode === "new_business") {
+    // Black and Pink owners configure branches, services and staff after signup.
   } else {
     if (!config.services?.length) missing.push("services");
     if (!config.businessHours?.length) missing.push("businessHours");
     if (!config.staff?.length) missing.push("staff");
   }
-  if (config.setupMode === "new_business" && config.product === "pink") {
-    if (config.business?.gstRegistered === undefined) missing.push("business.gstRegistered");
-    for (const field of ["branchName", "capacity", "bookingLimitPerDay"] as const) if (!config[field]) missing.push(field);
-    if (config.product === "pink") {
-      const serviceNames = new Set(config.services?.map(service => service.name));
-      if (serviceNames.size !== config.services?.length) missing.push("services.unique_names");
-      config.services?.forEach((service, index) => {
-        if (!Object.keys(service.vehicleTypePricing ?? {}).length) missing.push(`services.${index}.vehicleTypePricing`);
-        if (service.gstInclusive === undefined) missing.push(`services.${index}.gstInclusive`);
-      });
-      const emails = new Set<string>();
-      config.staff?.forEach((member, index) => {
-        if (!member.skills.length) missing.push(`staff.${index}.skills`);
-        const email = member.email?.toLowerCase();
-        if (!email || emails.has(email) || email === config.business?.ownerEmail?.toLowerCase()) missing.push(`staff.${index}.unique_email`);
-        if (email) emails.add(email);
-        if (!member.workingDays?.length || member.workingDays.some(day => !config.businessHours?.some(hours => hours.day === day))) missing.push(`staff.${index}.workingDays`);
-        if (!member.serviceNames?.length || member.serviceNames.some(name => !serviceNames.has(name))) missing.push(`staff.${index}.serviceNames`);
-      });
-      config.services?.forEach((service, index) => {
-        if (!config.staff?.some(member => member.serviceNames?.includes(service.name))) missing.push(`services.${index}.assigned_staff`);
-      });
-    }
-  }
+  if (config.product === "pink" && config.setupMode === "existing_business")
+    missing.push("supported_setup_mode:pink_new_business_only");
   return missing;
 }

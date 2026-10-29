@@ -1,10 +1,11 @@
 import { createSupabaseClient, getSupabaseProjectUrl, getSupabaseServiceRoleKey } from "../../db/supabase/supabase.client.js";
 import { getDidMappingByDid } from "../did-mappings.service.js";
-import { provisionBlackAiAgent } from "./black-ai-agent-provisioning.service.js";
+import { provisionBlackAiAgent } from "../bms_black/ai-reception.service.js";
 import { createOnboardingService, OnboardingError, type OnboardingRecord, type OnboardingRepository } from "./onboarding.service.js";
 import { roleMayRegisterAgents } from "../../config/supabase-app-role.js";
 import { provisionBlackBusiness } from "./black-business-provisioning.service.js";
 import { provisionTradeBusiness } from "./trade-business-provisioning.service.js";
+import { provisionPinkBusiness } from "../bms_pink/pink-onboarding.service.js";
 import { onboardingReviewNotifier } from "./onboarding-review-notification.service.js";
 import { prepareOnboardingOwner, notifyOnboardingAccount } from "./onboarding-account.service.js";
 
@@ -38,7 +39,7 @@ const repository: OnboardingRepository = {
   },
 };
 
-export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness, provisionTradeBusiness,
+export const onboardingService = createOnboardingService({ repository, getMapping: getDidMappingByDid, provision: provisionBlackAiAgent, provisionBlackBusiness, provisionTradeBusiness, provisionPinkBusiness,
   notifyOwnerReview: async input => {
     const result = await onboardingReviewNotifier.notify(input);
     console.info("[onboarding-review-notifications]", { draftId: input.draftId, sms: result.sms.status,

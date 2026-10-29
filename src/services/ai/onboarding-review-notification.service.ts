@@ -18,6 +18,8 @@ function ledgerError(error?: { code?: string } | null) {
 }
 export interface ReviewNoticeStore {
   claim(input: NoticeKey, channel: ReviewChannel): Promise<boolean>;
+  /** Atomically reclaim a known failed delivery for an explicit resend. */
+  retryFailed?(input: NoticeKey, channel: ReviewChannel): Promise<boolean>;
   read(input: NoticeKey, channel: ReviewChannel): Promise<StoredDelivery | null>;
   finish(input: NoticeKey, channel: ReviewChannel, result: ReviewDelivery): Promise<void>;
 }
@@ -27,7 +29,13 @@ export type ReviewNoticeProviders = {
 };
 
 export function reviewSmsRecipient(value: string): string | null {
-  const normalized = value.trim().replace(/[\s().-]/g, "").replace(/^00/, "+");
+  let normalized = value.trim().replace(/[\s().-]/g, "").replace(/^00/, "+");
+  // Onboarding is for Australian businesses and callers commonly provide a
+  // national number (for example, 04… or 03…) rather than an E.164 number.
+  // Convert only clearly valid Australian 10-digit national numbers; keep
+  // international numbers strict so we never guess a country code.
+  if (/^0[23478]\d{8}$/.test(normalized)) normalized = `+61${normalized.slice(1)}`;
+  else if (/^61[23478]\d{8}$/.test(normalized)) normalized = `+${normalized}`;
   return /^\+[1-9]\d{7,14}$/.test(normalized) ? normalized : null;
 }
 
@@ -70,7 +78,8 @@ export function createReviewNotifier(store: ReviewNoticeStore, providers: Review
         // previously accepted send or cause a duplicate.
         try {
           const existing = await current(input, channel);
-          if (existing.status !== "not_sent") return existing;
+          const retryingFailedDelivery = existing.status === "failed";
+          if (existing.status !== "not_sent" && !retryingFailedDelivery) return existing;
           if (!providers.configured(channel)) return { status: "not_configured" as const };
           if (channel === "sms" && !input.ownerPhone?.trim()) return { status: "not_sent" as const, code: "PHONE_NOT_COLLECTED" };
           const recipient = channel === "sms" ? reviewSmsRecipient(input.ownerPhone ?? "") : input.ownerEmail.trim();
@@ -79,7 +88,10 @@ export function createReviewNotifier(store: ReviewNoticeStore, providers: Review
           const url = new URL(input.reviewUrl);
           if (url.protocol !== "https:" || url.username || url.password || ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
             return { status: "failed" as const, code: "PUBLIC_HTTPS_REVIEW_URL_REQUIRED" };
-          if (!await store.claim(input, channel)) return await current(input, channel);
+          const claimed = retryingFailedDelivery
+            ? await store.retryFailed?.(input, channel) ?? false
+            : await store.claim(input, channel);
+          if (!claimed) return await current(input, channel);
           let result: ReviewDelivery;
           try { result = await providers.send(channel, recipient, input.reviewUrl, input.purpose); }
           catch { result = { status: "unknown", code: "PROVIDER_OUTCOME_UNKNOWN" }; }
@@ -115,6 +127,13 @@ const store: ReviewNoticeStore = {
       .eq("configuration_hash", input.configurationHash).eq("channel", channel).abortSignal(AbortSignal.timeout(5000)).maybeSingle();
     if (error) throw ledgerError(error);
     return data as StoredDelivery | null;
+  },
+  async retryFailed(input, channel) {
+    const { data, error } = await table().update({ status: "processing", code: null, updated_at: new Date().toISOString() })
+      .eq("draft_id", input.draftId).eq("configuration_hash", input.configurationHash).eq("channel", channel)
+      .eq("status", "failed").select("channel").maybeSingle().abortSignal(AbortSignal.timeout(5000));
+    if (error) throw ledgerError(error);
+    return Boolean(data);
   },
   async finish(input, channel, result) {
     const { error } = await table().update({ status: result.status, code: result.code ?? null, updated_at: new Date().toISOString() })

@@ -3,12 +3,12 @@ import { Router } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { TradeAgentIdentityError } from "../../services/ai/trade-agent-identity.service.js";
+import { TradeAgentIdentityError } from "../../services/bms_blue/agent-identity.service.js";
 import {
   authenticateTradeMcpRequest, resolveTradeBusiness,
   getTradeBusinessProfile, listTradeServices, getTradeAvailability, createTradeInspectionRequest,
   tradeAvailabilityArguments, tradeRequestArguments, type TradeMcpTenant,
-} from "../../services/ai/trade-front-office.service.js";
+} from "../../services/bms_blue/front-office.service.js";
 
 const router = Router();
 const windows = new Map<string, { count: number; expires: number }>();

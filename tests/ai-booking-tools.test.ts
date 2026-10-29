@@ -21,7 +21,7 @@ async function token(f:ReturnType<typeof fixture>) {return (await f.tools.getAva
 test("uses branch timezone and removes past drop-off times",async()=>{
   const f=fixture();const result=await f.tools.getAvailableSlots({...query,date:"2026-10-13"});
   assert.deepEqual(result.slots.map(slot=>slot.time),["14:00"]);
-  assert.equal(result.slotType,"DROP_OFF");assert.equal(result.bookingWorkflow,"STAFF_APPROVAL");
+  assert.equal(result.slotType,"DROP_OFF");assert.equal(result.bookingWorkflow,"WORKSHOP_PERMISSION");
 });
 test("rejects impossible dates and another branch's service",async()=>{
   const f=fixture();

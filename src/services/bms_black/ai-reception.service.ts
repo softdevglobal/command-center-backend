@@ -2,29 +2,17 @@ import { createHash } from "node:crypto";
 import admin from "firebase-admin";
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
 import { getDidMappingByDid, listDidMappings } from "../did-mappings.service.js";
+import { AiAgentSetupError, type ProvisioningDependencies } from "../ai/ai-agent-provisioning.shared.js";
 import type { DidMappingRow } from "../../types/did-mapping.types.js";
+import { resolveVoiceProductForDid } from "../ai/voice-route.service.js";
 
-export class AiAgentSetupError extends Error {
-  constructor(public readonly status: number, message: string) { super(message); }
-}
-
-type Identity = { uid: string; disabled: boolean };
+export { AiAgentSetupError } from "../ai/ai-agent-provisioning.shared.js";
 export type BlackAiAgentProvisioningInput = {
   did: string;
   name: string;
   createdBy: string;
   expectedAssignment?: { tenantId: string; ownerUid: string; branchId: string; queueId: string };
 };
-export type ProvisioningDependencies = {
-  getMapping: (did: string) => Promise<DidMappingRow | null>;
-  getAgent: (uid: string) => Promise<Record<string, unknown> | undefined>;
-  getUser: (uid: string) => Promise<Identity>;
-  createUser: (input: { uid: string; displayName: string }) => Promise<Identity>;
-  markUser: (uid: string) => Promise<void>;
-  createAgent: (uid: string, data: Record<string, unknown>) => Promise<void>;
-  deleteUser: (uid: string) => Promise<void>;
-};
-
 export function aiAgentUid(did: string): string {
   return `ai-black-${createHash("sha256").update(did).digest("hex").slice(0, 40)}`;
 }
@@ -93,6 +81,16 @@ function blackApp(): admin.app.App {
   return app;
 }
 
+async function isBlackMapping(mapping: DidMappingRow): Promise<boolean> {
+  if (!mapping.tenant_id || !mapping.owner_id || !mapping.branch_id?.trim()) return false;
+  try {
+    const route = await resolveVoiceProductForDid(mapping.did.replace(/^\+/, ""));
+    return route.brand === "black";
+  } catch {
+    return false;
+  }
+}
+
 const pending = new Map<string, Promise<Awaited<ReturnType<ReturnType<typeof createAiAgentProvisioner>>>>>();
 
 export async function provisionBlackAiAgent(input: BlackAiAgentProvisioningInput) {
@@ -103,7 +101,13 @@ export async function provisionBlackAiAgent(input: BlackAiAgentProvisioningInput
   const auth = admin.auth(app);
   const db = admin.firestore(app);
   const provision = createAiAgentProvisioner({
-    getMapping: getDidMappingByDid,
+    getMapping: async (did) => {
+      const mapping = await getDidMappingByDid(did);
+      if (mapping && !await isBlackMapping(mapping)) {
+        throw new AiAgentSetupError(400, "Choose a DID mapped to a Black workshop, branch and queue.");
+      }
+      return mapping;
+    },
     getAgent: async (uid) => (await db.doc(`call_center_agents/${uid}`).get()).data(),
     getUser: (uid) => auth.getUser(uid),
     createUser: (user) => auth.createUser(user),
@@ -123,7 +127,9 @@ export async function listBlackAiAgentOptions() {
     db.collection("call_center_agents").where("accountType", "==", "ai-front-office").get(),
   ]);
   const accounts = new Map(documents.docs.map((doc) => [doc.id, doc.data()]));
-  return mappings.filter((row) => row.tenant_id && row.owner_id && row.branch_id).map((row) => {
+  const scopedMappings = (await Promise.all(mappings.map(async (row) => await isBlackMapping(row) ? row : null)))
+    .filter((row): row is DidMappingRow => row !== null);
+  return scopedMappings.map((row) => {
     const uid = aiAgentUid(row.did);
     const account = accounts.get(uid);
     return {

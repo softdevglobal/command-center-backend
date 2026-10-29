@@ -2,6 +2,8 @@ import admin from "firebase-admin";
 import { randomBytes } from "node:crypto";
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
 import { getFirebaseBlueApp } from "../../db/firebase/firebase.blue.js";
+import { getFirebasePinkApp } from "../../db/firebase/firebase.pink.js";
+import { pinkOnboardingLoginUrl } from "../bms_pink/pink-onboarding.service.js";
 import { createSupabaseClient, getSupabaseProjectUrl, getSupabaseServiceRoleKey } from "../../db/supabase/supabase.client.js";
 import { blackAdminEndpoint } from "../../config/black-api.js";
 import { onboardingReviewNotifier } from "./onboarding-review-notification.service.js";
@@ -9,10 +11,11 @@ import { OnboardingError, type OnboardingDependencies } from "./onboarding.servi
 
 export const onboardingOwnerUid = (draftId: string) => `ai-owner-${draftId.replace(/-/g, "")}`;
 export function onboardingLoginUrl(product: string | undefined) {
+  if (product === "pink") return pinkOnboardingLoginUrl();
   return product === "trade" ? `${(process.env.TRADE_ADMIN_BASE_URL?.trim() || "https://trade.bmspros.com.au").replace(/\/+$/, "")}/login` : blackAdminEndpoint("/login");
 }
 function productAuth(product: string | undefined) {
-  const app = product === "trade" ? getFirebaseBlueApp() : product === "black" ? getFirebaseBlackApp() : null;
+  const app = product === "trade" ? getFirebaseBlueApp() : product === "pink" ? getFirebasePinkApp() : product === "black" ? getFirebaseBlackApp() : null;
   if (!app) throw new OnboardingError(503, "ACCOUNT_SETUP_UNAVAILABLE", "The selected business account service is unavailable.");
   return admin.auth(app);
 }

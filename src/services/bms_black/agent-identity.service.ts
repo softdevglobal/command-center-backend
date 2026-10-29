@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 
 import { getFirebaseBlackApp } from "../../db/firebase/firebase.black.js";
-import { aiAgentUid } from "./black-ai-agent-provisioning.service.js";
+import { aiAgentUid } from "./ai-reception.service.js";
 import { getDidMappingByDid } from "../did-mappings.service.js";
 
 type TenantCredential = {

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import aiAgentAdminRoutes from "../src/routes/ai/ai-agent-admin.routes.js";
-import { AiAgentSetupError, aiAgentUid, createAiAgentProvisioner, type ProvisioningDependencies } from "../src/services/ai/black-ai-agent-provisioning.service.js";
+import blackAiReceptionRoutes from "../src/routes/bms_black/ai-reception.routes.js";
+import { AiAgentSetupError, aiAgentUid, createAiAgentProvisioner, type ProvisioningDependencies } from "../src/services/bms_black/ai-reception.service.js";
 
 function fixture() {
   const mapping = { did: "+61400000000", tenant_id: "tenant-a", queue_id: "queue-a", label: "Pilot", owner_id: "owner-a", branch_id: "branch-a", workshop_name: "Workshop A", branch_name: "Branch A" };
@@ -90,12 +90,12 @@ test("admin endpoints reject unauthenticated requests and setup-secret access be
   process.env.SETUP_SECRET_KEY = "test-only-setup-secret";
   const app = express();
   app.use(express.json());
-  app.use("/ai-agents", aiAgentAdminRoutes);
+  app.use("/bms-black/ai-reception", blackAiReceptionRoutes);
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const url = `http://127.0.0.1:${address.port}/ai-agents`;
+  const url = `http://127.0.0.1:${address.port}/bms-black/ai-reception`;
   try {
     for (const method of ["GET", "POST"]) {
       assert.equal((await fetch(url, { method })).status, 401);

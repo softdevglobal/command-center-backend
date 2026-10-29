@@ -74,7 +74,7 @@ export function createOnboardingCallRouter(options: {
       }
       server.resource("onboarding-call-profile", profileUri, async () => ({ contents: [{ uri: profileUri, mimeType: "application/json", text: JSON.stringify({
         mode: "onboarding", did, voiceInstructions: runtime.instructions, backendInstructions: runtime.backendInstructions,
-        greeting: "Introduce yourself as BMS Pro's AI onboarding assistant, explain that setup details are saved, and ask if the caller would like help setting up their business.",
+        greeting: "Greet the caller warmly as Sophie, BMS Pro's AI onboarding assistant. In a friendly, natural tone, say you can help get their business set up and ask if they would like to get started.",
       }) }] }));
       transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
       const activeServer = server;

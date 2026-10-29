@@ -22,6 +22,9 @@ router.post("/", async (req, res) => {
     if (route.brand === "trade" && process.env.AI_MCP_TRADE_ENABLED !== "true") {
       res.status(404).json({ error: "Trade MCP is disabled." }); return;
     }
+    if (route.brand === "pink" && process.env.AI_MCP_PINK_ENABLED !== "true") {
+      res.status(404).json({ error: "Pink MCP is disabled." }); return;
+    }
     res.setHeader("Cache-Control", "no-store");
     res.json(route);
   } catch {
